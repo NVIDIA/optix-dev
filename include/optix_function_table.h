@@ -26,7 +26,7 @@
 #define __optix_optix_function_table_h__
 
 /// The OptiX ABI version.
-#define OPTIX_ABI_VERSION 55
+#define OPTIX_ABI_VERSION 60
 
 #ifndef OPTIX_DEFINE_ABI_VERSION_ONLY
 

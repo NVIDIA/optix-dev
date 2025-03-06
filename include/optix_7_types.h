@@ -37,6 +37,8 @@
 #include <stddef.h> /* for size_t */
 #endif
 
+
+
 /// \defgroup optix_types Types
 /// \brief OptiX Types
 
@@ -45,7 +47,7 @@
 */
 
 // This typedef should match the one in cuda.h in order to avoid compilation errors.
-#if defined(__x86_64) || defined(AMD64) || defined(_M_AMD64) || defined(__powerpc64__) || defined(__EDG_IA64_ABI)/*=NVRTC*/ || defined(__aarch64__)
+#if defined(_WIN64) || defined(__LP64__)
 /// CUDA device pointer
 typedef unsigned long long CUdeviceptr;
 #else
@@ -108,7 +110,6 @@ typedef unsigned int OptixVisibilityMask;
 #define OPTIX_COMPILE_DEFAULT_MAX_PAYLOAD_VALUE_COUNT 32
 
 
-
 /// Result codes returned from API functions
 ///
 /// All host side API functions return OptixResult with the exception of optixGetErrorName
@@ -155,6 +156,7 @@ typedef enum OptixResult
     OPTIX_ERROR_LIBRARY_NOT_FOUND               = 7804,
     OPTIX_ERROR_ENTRY_SYMBOL_NOT_FOUND          = 7805,
     OPTIX_ERROR_LIBRARY_UNLOAD_FAILURE          = 7806,
+    OPTIX_ERROR_DEVICE_OUT_OF_MEMORY            = 7807,
     OPTIX_ERROR_CUDA_ERROR                      = 7900,
     OPTIX_ERROR_INTERNAL_ERROR                  = 7990,
     OPTIX_ERROR_UNKNOWN                         = 7999,
@@ -269,6 +271,11 @@ typedef enum OptixGeometryFlags
     /// invocation of the anyhit program.  Otherwise, the anyhit program may be invoked
     /// more than once.
     OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL = 1u << 1,
+
+    /// Prevent triangles from getting culled due to their orientation.
+    /// Effectively ignores ray flags
+    /// OPTIX_RAY_FLAG_CULL_BACK_FACING_TRIANGLES and OPTIX_RAY_FLAG_CULL_FRONT_FACING_TRIANGLES.
+    OPTIX_GEOMETRY_FLAG_DISABLE_TRIANGLE_FACE_CULLING = 1u << 2,
 
 } OptixGeometryFlags;
 
@@ -404,6 +411,7 @@ typedef enum OptixPrimitiveType
     OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR                  = 0x2503,
     /// CatmullRom curve with circular cross-section.
     OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM              = 0x2504,
+    OPTIX_PRIMITIVE_TYPE_SPHERE                        = 0x2506,
     /// Triangle.
     OPTIX_PRIMITIVE_TYPE_TRIANGLE                      = 0x2531,
 } OptixPrimitiveType;
@@ -423,6 +431,7 @@ typedef enum OptixPrimitiveTypeFlags
     OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_LINEAR            = 1 << 3,
     /// CatmullRom curve with circular cross-section.
     OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM        = 1 << 4,
+    OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE                  = 1 << 6,
     /// Triangle.
     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE                = 1 << 31,
 } OptixPrimitiveTypeFlags;
@@ -507,6 +516,64 @@ typedef struct OptixBuildInputCurveArray
     unsigned int endcapFlags;
 } OptixBuildInputCurveArray;
 
+/// Sphere inputs
+///
+/// A sphere is defined by a center point and a radius.
+/// Each center point is represented by a vertex in the vertex buffer.
+/// There is either a single radius for all spheres, or the radii are represented by entries in the radius buffer.
+///
+/// The vertex buffers and radius buffers point to a host array of device pointers, one per motion step.
+/// Host array size must match the number of motion keys as set in #OptixMotionOptions (or an array of size 1 if OptixMotionOptions::numKeys is set
+/// to 0 or 1). Each per motion key device pointer must point to an array of vertices corresponding to the center points of the spheres, or
+/// an array of 1 or N radii. Format OPTIX_VERTEX_FORMAT_FLOAT3 is used for vertices, OPTIX_VERTEX_FORMAT_FLOAT for radii.
+///
+/// \see #OptixBuildInput::sphereArray
+typedef struct OptixBuildInputSphereArray
+{
+  /// Pointer to host array of device pointers, one per motion step. Host array size must match number of
+  /// motion keys as set in #OptixMotionOptions (or an array of size 1 if OptixMotionOptions::numKeys is set
+  /// to 1). Each per-motion-key device pointer must point to an array of floats (the center points of 
+  /// the spheres). 
+  const CUdeviceptr* vertexBuffers;
+
+  /// Stride between vertices. If set to zero, vertices are assumed to be tightly
+  /// packed and stride is sizeof( float3 ).
+  unsigned int vertexStrideInBytes;
+  /// Number of vertices in each buffer in vertexBuffers.
+  unsigned int numVertices;
+
+  /// Parallel to vertexBuffers: a device pointer per motion step, each with numRadii float values,
+  /// specifying the sphere radius corresponding to each vertex.
+  const CUdeviceptr* radiusBuffers;
+  /// Stride between radii. If set to zero, widths are assumed to be tightly
+  /// packed and stride is sizeof( float ).
+  unsigned int radiusStrideInBytes;
+  /// Boolean value indicating whether a single radius per radius buffer is used,
+  /// or the number of radii in radiusBuffers equals numVertices.
+  int singleRadius;
+
+  /// Array of flags, to specify flags per sbt record,
+  /// combinations of OptixGeometryFlags describing the
+  /// primitive behavior, size must match numSbtRecords
+  const unsigned int* flags;
+
+  /// Number of sbt records available to the sbt index offset override.
+  unsigned int numSbtRecords;
+  /// Device pointer to per-primitive local sbt index offset buffer. May be NULL.
+  /// Every entry must be in range [0,numSbtRecords-1].
+  /// Size needs to be the number of primitives.
+  CUdeviceptr sbtIndexOffsetBuffer;
+  /// Size of type of the sbt index offset. Needs to be 0, 1, 2 or 4 (8, 16 or 32 bit).
+  unsigned int sbtIndexOffsetSizeInBytes;
+  /// Stride between the sbt index offsets. If set to zero, the offsets are assumed to be tightly
+  /// packed and the stride matches the size of the type (sbtIndexOffsetSizeInBytes).
+  unsigned int sbtIndexOffsetStrideInBytes;
+
+  /// Primitive index bias, applied in optixGetPrimitiveIndex().
+  /// Sum of primitiveIndexOffset and number of primitives must not overflow 32bits.
+  unsigned int primitiveIndexOffset;
+} OptixBuildInputSphereArray;
+
 /// AABB inputs
 typedef struct OptixAabb
 {
@@ -579,6 +646,7 @@ typedef struct OptixBuildInputInstanceArray
 
     /// Number of elements in #OptixBuildInputInstanceArray::instances.
     unsigned int numInstances;
+
 } OptixBuildInputInstanceArray;
 
 /// Enum to distinguish the different build input types.
@@ -595,7 +663,9 @@ typedef enum OptixBuildInputType
     /// Instance pointer inputs. \see #OptixBuildInputInstanceArray
     OPTIX_BUILD_INPUT_TYPE_INSTANCE_POINTERS = 0x2144,
     /// Curve inputs. \see #OptixBuildInputCurveArray
-    OPTIX_BUILD_INPUT_TYPE_CURVES = 0x2145
+    OPTIX_BUILD_INPUT_TYPE_CURVES = 0x2145,
+    /// Sphere inputs. \see #OptixBuildInputSphereArray
+    OPTIX_BUILD_INPUT_TYPE_SPHERES = 0x2146
 } OptixBuildInputType;
 
 /// Build inputs.
@@ -614,6 +684,8 @@ typedef struct OptixBuildInput
         OptixBuildInputTriangleArray triangleArray;
         /// Curve inputs.
         OptixBuildInputCurveArray curveArray;
+        /// Sphere inputs.
+        OptixBuildInputSphereArray sphereArray;
         /// Custom primitive inputs.
         OptixBuildInputCustomPrimitiveArray customPrimitiveArray;
         /// Instance and instance pointer inputs.
@@ -691,7 +763,6 @@ typedef struct OptixInstance
 
     /// round up to 80-byte, to ensure 16-byte alignment
     unsigned int pad[2];
-
 } OptixInstance;
 
 /// Builder Options
@@ -718,6 +789,7 @@ typedef enum OptixBuildFlags
     ///     optixGetQuadraticBSplineVertexData
     ///     optixGetCubicBSplineVertexData
     ///     optixGetCatmullRomVertexData
+    ///     optixGetSphereData
     OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS = 1u << 4,
 
     /// Allow random access to instances
@@ -1016,14 +1088,15 @@ typedef enum OptixTraversableType
 /// \see #OptixImage2D::format
 typedef enum OptixPixelFormat
 {
-    OPTIX_PIXEL_FORMAT_HALF2  = 0x2207,  ///< two halfs, XY
-    OPTIX_PIXEL_FORMAT_HALF3  = 0x2201,  ///< three halfs, RGB
-    OPTIX_PIXEL_FORMAT_HALF4  = 0x2202,  ///< four halfs, RGBA
-    OPTIX_PIXEL_FORMAT_FLOAT2 = 0x2208,  ///< two floats, XY
-    OPTIX_PIXEL_FORMAT_FLOAT3 = 0x2203,  ///< three floats, RGB
-    OPTIX_PIXEL_FORMAT_FLOAT4 = 0x2204,  ///< four floats, RGBA
-    OPTIX_PIXEL_FORMAT_UCHAR3 = 0x2205,  ///< three unsigned chars, RGB
-    OPTIX_PIXEL_FORMAT_UCHAR4 = 0x2206   ///< four unsigned chars, RGBA
+    OPTIX_PIXEL_FORMAT_HALF2  = 0x2207,               ///< two halfs, XY
+    OPTIX_PIXEL_FORMAT_HALF3  = 0x2201,               ///< three halfs, RGB
+    OPTIX_PIXEL_FORMAT_HALF4  = 0x2202,               ///< four halfs, RGBA
+    OPTIX_PIXEL_FORMAT_FLOAT2 = 0x2208,               ///< two floats, XY
+    OPTIX_PIXEL_FORMAT_FLOAT3 = 0x2203,               ///< three floats, RGB
+    OPTIX_PIXEL_FORMAT_FLOAT4 = 0x2204,               ///< four floats, RGBA
+    OPTIX_PIXEL_FORMAT_UCHAR3 = 0x2205,               ///< three unsigned chars, RGB
+    OPTIX_PIXEL_FORMAT_UCHAR4 = 0x2206,               ///< four unsigned chars, RGBA
+    OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER = 0x2209, ///< internal format
 } OptixPixelFormat;
 
 /// Image descriptor used by the denoiser.
@@ -1040,7 +1113,9 @@ typedef struct OptixImage2D
     /// Stride between subsequent rows of the image (in bytes).
     unsigned int rowStrideInBytes;
     /// Stride between subsequent pixels of the image (in bytes).
-    /// For now, only 0 or the value that corresponds to a dense packing of pixels (no gaps) is supported.
+    /// If set to 0, dense packing (no gaps) is assumed.
+    /// For pixel format OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER it must be set to
+    /// at least OptixDenoiserSizes::internalGuideLayerSizeInBytes.
     unsigned int pixelStrideInBytes;
     /// Pixel format.
     OptixPixelFormat format;
@@ -1065,6 +1140,13 @@ typedef enum OptixDenoiserModelKind
 
     /// Use the built-in model appropriate for high dynamic range input and support for AOVs, temporally stable
     OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV = 0x2326,
+
+    /// Use the built-in model appropriate for high dynamic range input and support for AOVs, upscaling 2x
+    OPTIX_DENOISER_MODEL_KIND_UPSCALE2X = 0x2327,
+
+    /// Use the built-in model appropriate for high dynamic range input and support for AOVs, upscaling 2x,
+    /// temporally stable
+    OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X = 0x2328,
 } OptixDenoiserModelKind;
 
 /// Options used by the denoiser
@@ -1092,6 +1174,9 @@ typedef struct OptixDenoiserGuideLayer
 
     // 2d flow image, pixel flow from previous to current frame for each pixel
     OptixImage2D  flow;
+
+    OptixImage2D  previousOutputInternalGuideLayer;
+    OptixImage2D  outputInternalGuideLayer;
 } OptixDenoiserGuideLayer;
 
 /// Input/Output layers for the denoiser
@@ -1114,13 +1199,22 @@ typedef struct OptixDenoiserLayer
 /// \see #optixDenoiserInvoke()
 /// \see #optixDenoiserComputeIntensity()
 /// \see #optixDenoiserComputeAverageColor()
+typedef enum OptixDenoiserAlphaMode
+{
+    /// Copy alpha (if present) from input layer, no denoising.
+    OPTIX_DENOISER_ALPHA_MODE_COPY = 0,
+
+    /// Denoise alpha separately. With AOV model kinds, treat alpha like an AOV.
+    OPTIX_DENOISER_ALPHA_MODE_ALPHA_AS_AOV = 1,
+
+    /// With AOV model kinds, full denoise pass with alpha.
+    /// This is slower than OPTIX_DENOISER_ALPHA_MODE_ALPHA_AS_AOV.
+    OPTIX_DENOISER_ALPHA_MODE_FULL_DENOISE_PASS = 2
+} OptixDenoiserAlphaMode;
 typedef struct OptixDenoiserParams
 {
-    /// alpha denoise mode:
-    /// 0 Copy alpha (if present) from input layer, no denoising.
-    /// 1 Denoise alpha separately. In AOV model kinds, treat alpha like an AOV.
-    /// 2 In AOV model kinds, full denoise pass with alpha (slower than mode 1).
-    unsigned int denoiseAlpha;
+    /// alpha denoise mode
+    OptixDenoiserAlphaMode denoiseAlpha;
 
     /// average log intensity of input image (default null pointer). points to a single float.
     /// with the default (null pointer) denoised results will not be optimal for very dark or
@@ -1138,6 +1232,12 @@ typedef struct OptixDenoiserParams
     /// points to three floats. with the default (null pointer) denoised results will not be
     /// optimal.
     CUdeviceptr  hdrAverageColor;
+
+    /// In temporal modes this parameter must be set to 1 if previous layers (e.g.
+    /// previousOutputInternalGuideLayer) contain valid data. This is the case in the
+    /// second and subsequent frames of a sequence (for example after a change of camera
+    /// angle). In the first frame of such a sequence this parameter must be set to 0.
+    unsigned int temporalModeUsePreviousLayers;
 } OptixDenoiserParams;
 
 /// Various sizes related to the denoiser.
@@ -1145,10 +1245,30 @@ typedef struct OptixDenoiserParams
 /// \see #optixDenoiserComputeMemoryResources()
 typedef struct OptixDenoiserSizes
 {
-    size_t       stateSizeInBytes;
-    size_t       withOverlapScratchSizeInBytes;
-    size_t       withoutOverlapScratchSizeInBytes;
+    /// Size of state memory passed to #optixDenoiserSetup, #optixDenoiserInvoke.
+    size_t stateSizeInBytes;
+
+    /// Size of scratch memory passed to #optixDenoiserSetup, #optixDenoiserInvoke.
+    /// Overlap added to dimensions passed to #optixDenoiserComputeMemoryResources.
+    size_t withOverlapScratchSizeInBytes;
+
+    /// Size of scratch memory passed to #optixDenoiserSetup, #optixDenoiserInvoke.
+    /// No overlap added.
+    size_t withoutOverlapScratchSizeInBytes;
+
+    /// Overlap on all four tile sides.
     unsigned int overlapWindowSizeInPixels;
+
+    /// Size of scratch memory passed to #optixDenoiserComputeAverageColor.
+    /// The size is independent of the tile/image resolution.
+    size_t computeAverageColorSizeInBytes;
+
+    /// Size of scratch memory passed to #optixDenoiserComputeIntensity.
+    /// The size is independent of the tile/image resolution.
+    size_t computeIntensitySizeInBytes;
+
+    /// Number of bytes for each pixel in internal guide layers.
+    size_t internalGuideLayerPixelSizeInBytes;
 } OptixDenoiserSizes;
 
 /// Ray flags passed to the device function #optixTrace().  These affect the behavior of
@@ -1613,7 +1733,7 @@ typedef enum OptixExceptionCodes
     OPTIX_EXCEPTION_CODE_UNSUPPORTED_PRIMITIVE_TYPE = -8,
 
     /// The shader encountered a call to optixTrace with at least
-    /// one of the float arguments being inf or nan.
+    /// one of the float arguments being inf or nan, or the tmin argument is negative.
     /// Exception details:
     ///     optixGetExceptionInvalidRay()
     OPTIX_EXCEPTION_CODE_INVALID_RAY = -9,

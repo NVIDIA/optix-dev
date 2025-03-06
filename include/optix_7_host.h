@@ -39,6 +39,8 @@
 #include <cuda.h>
 #endif
 
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -676,7 +678,6 @@ OptixResult optixConvertPointerToTraversableHandle( OptixDeviceContext      onDe
 
 
 
-
 //@}
 /// \defgroup optix_host_api_denoiser Denoiser
 /// \ingroup optix_host_api
@@ -721,8 +722,9 @@ OptixResult optixDenoiserDestroy( OptixDenoiser denoiser );
 /// Memory for state and scratch buffers must be allocated with the sizes in 'returnSizes' and scratch memory
 /// passed to optixDenoiserSetup, optixDenoiserInvoke,
 /// optixDenoiserComputeIntensity and optixDenoiserComputeAverageColor.
-/// For tiled denoising an overlap area must be added to each tile on all sides which increases the amount of
-/// memory needed to denoise a tile. In case of tiling use withOverlapScratchSizeInBytes.
+/// For tiled denoising an overlap area ('overlapWindowSizeInPixels') must be added to each tile on all sides
+/// which increases the amount of
+/// memory needed to denoise a tile. In case of tiling use withOverlapScratchSizeInBytes for scratch memory size.
 /// If only full resolution images are denoised, withoutOverlapScratchSizeInBytes can be used which is always
 /// smaller than withOverlapScratchSizeInBytes.
 ///
@@ -851,10 +853,8 @@ OptixResult optixDenoiserInvoke( OptixDenoiser                   denoiser,
 /// More details could be found in the Reinhard tonemapping paper:
 /// http://www.cmap.polytechnique.fr/~peyre/cours/x2005signal/hdr_photographic.pdf
 ///
-/// This function needs scratch memory with a size of at least
-/// sizeof( int ) * ( 2 + inputImage::width * inputImage::height ). When denoising entire images (no tiling)
-/// the same scratch memory as passed to optixDenoiserInvoke could be used.
-//
+/// The size of scratch memory required can be queried with #optixDenoiserComputeMemoryResources.
+///
 /// data type unsigned char is not supported for 'inputImage', it must be 3 or 4 component half/float.
 ///
 /// \param[in] denoiser
@@ -873,9 +873,8 @@ OptixResult optixDenoiserComputeIntensity( OptixDenoiser       denoiser,
 /// Compute average logarithmic for each of the first three channels for the given image.
 /// When denoising tiles the intensity of the entire image should be computed, i.e. not per tile to get
 /// consistent results.
-/// This function needs scratch memory with a size of at least
-/// sizeof( int ) * ( 3 + 3 * inputImage::width * inputImage::height ). When denoising entire images (no tiling)
-/// the same scratch memory as passed to optixDenoiserInvoke could be used.
+///
+/// The size of scratch memory required can be queried with #optixDenoiserComputeMemoryResources.
 ///
 /// data type unsigned char is not supported for 'inputImage', it must be 3 or 4 component half/float.
 ///

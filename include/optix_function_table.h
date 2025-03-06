@@ -1,13 +1,13 @@
-/* 
-* SPDX-FileCopyrightText: Copyright (c) 2019 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved. 
-* SPDX-License-Identifier: LicenseRef-NvidiaProprietary 
-* 
-* NVIDIA CORPORATION, its affiliates and licensors retain all intellectual 
-* property and proprietary rights in and to this material, related 
-* documentation and any modifications thereto. Any use, reproduction, 
-* disclosure or distribution of this material and related documentation 
-* without an express license agreement from NVIDIA CORPORATION or 
-* its affiliates is strictly prohibited. 
+/*
+* SPDX-FileCopyrightText: Copyright (c) 2019 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+*
+* NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+* property and proprietary rights in and to this material, related
+* documentation and any modifications thereto. Any use, reproduction,
+* disclosure or distribution of this material and related documentation
+* without an express license agreement from NVIDIA CORPORATION or
+* its affiliates is strictly prohibited.
 */
 /// @file
 /// @author NVIDIA Corporation
@@ -17,7 +17,7 @@
 #define OPTIX_OPTIX_FUNCTION_TABLE_H
 
 /// The OptiX ABI version.
-#define OPTIX_ABI_VERSION 93
+#define OPTIX_ABI_VERSION 105
 
 #ifndef OPTIX_DEFINE_ABI_VERSION_ONLY
 
@@ -279,6 +279,21 @@ typedef struct OptixFunctionTable
                                                           const OptixDisplacementMicromapArrayBuildInput* buildInput,
                                                           const OptixMicromapBuffers*                     buffers );
 
+    /// See ::optixClusterAccelComputeMemoryUsage().
+    OptixResult ( *optixClusterAccelComputeMemoryUsage )( OptixDeviceContext                 context,
+                                                          OptixClusterAccelBuildMode         buildMode,
+                                                          const OptixClusterAccelBuildInput* buildInput,
+                                                          OptixAccelBufferSizes*             bufferSizes );
+
+    /// See ::optixClusterAccelBuild().
+    OptixResult ( *optixClusterAccelBuild )( OptixDeviceContext                    context,
+                                             CUstream                              stream,
+                                             const OptixClusterAccelBuildModeDesc* buildModeDesc,
+                                             const OptixClusterAccelBuildInput*    buildInput,
+                                             CUdeviceptr                           argsArray,
+                                             CUdeviceptr                           argsCount,
+                                             unsigned int                          argsStrideInBytes );
+
     //@ }
     /// \name Launch
     //@ {
@@ -296,8 +311,29 @@ typedef struct OptixFunctionTable
                                   unsigned int                   height,
                                   unsigned int                   depth );
 
-    OptixResult ( *optixPlaceholder001 )( OptixDeviceContext context );
-    OptixResult ( *optixPlaceholder002 )( OptixDeviceContext context );
+    //@ }
+    /// \name Cooperative Vector
+    //@ {
+
+    /// See ::optixCoopVecMatrixConvert().
+    OptixResult ( *optixCoopVecMatrixConvert )( OptixDeviceContext             context,
+                                                CUstream                       stream,
+                                                unsigned int                   numNetworks,
+                                                const OptixNetworkDescription* inputNetworkDescription,
+                                                CUdeviceptr                    inputNetworks,
+                                                size_t                         inputNetworkStrideInBytes,
+                                                const OptixNetworkDescription* outputNetworkDescription,
+                                                CUdeviceptr                    outputNetworks,
+                                                size_t                         outputNetworkStrideInBytes );
+
+    /// See ::optixCoopVecMatrixComputeSize().
+    OptixResult ( *optixCoopVecMatrixComputeSize )( OptixDeviceContext       context,
+                                                    unsigned int             N,
+                                                    unsigned int             K,
+                                                    OptixCoopVecElemType     elementType,
+                                                    OptixCoopVecMatrixLayout layout,
+                                                    size_t                   rowColumnStrideInBytes,
+                                                    size_t*                  sizeInBytes );
 
     //@ }
     /// \name Denoiser

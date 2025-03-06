@@ -1,21 +1,21 @@
 
-/* 
-* SPDX-FileCopyrightText: Copyright (c) 2019 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved. 
-* SPDX-License-Identifier: LicenseRef-NvidiaProprietary 
-* 
-* NVIDIA CORPORATION, its affiliates and licensors retain all intellectual 
-* property and proprietary rights in and to this material, related 
-* documentation and any modifications thereto. Any use, reproduction, 
-* disclosure or distribution of this material and related documentation 
-* without an express license agreement from NVIDIA CORPORATION or 
-* its affiliates is strictly prohibited. 
+/*
+* SPDX-FileCopyrightText: Copyright (c) 2019 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+*
+* NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+* property and proprietary rights in and to this material, related
+* documentation and any modifications thereto. Any use, reproduction,
+* disclosure or distribution of this material and related documentation
+* without an express license agreement from NVIDIA CORPORATION or
+* its affiliates is strictly prohibited.
 */
 /// @file
 /// @author NVIDIA Corporation
 /// @brief  OptiX public API header
 ///
 /// OptiX types include file -- defines types and enums used by the API.
-/// For the math library routines include optix_math.h
+///
 
 #ifndef OPTIX_OPTIX_TYPES_H
 #define OPTIX_OPTIX_TYPES_H
@@ -108,10 +108,15 @@ typedef unsigned int OptixVisibilityMask;
 
 /// Predefined index to indicate that a triangle in the BVH build doesn't have an associated opacity micromap,
 /// and that it should revert to one of the four possible states for the full triangle.
-#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_TRANSPARENT          ( -1 )
-#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_OPAQUE               ( -2 )
-#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_UNKNOWN_TRANSPARENT  ( -3 )
-#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_UNKNOWN_OPAQUE       ( -4 )
+#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_TRANSPARENT             ( -1 )
+#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_OPAQUE                  ( -2 )
+#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_UNKNOWN_TRANSPARENT     ( -3 )
+#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_FULLY_UNKNOWN_OPAQUE          ( -4 )
+/// Predefined index to indicate that no opacity micromap applies for a triangle. The opaque/non-opaque state is determined by the geometry flags,
+/// similar as for triangles in instances with the OPTIX_INSTANCE_FLAG_DISABLE_OPACITY_MICROMAPS flag set.
+/// This special index is only available for the opacity micromap index array supplied to OptixClusterAccelBuildInputTrianglesArgs.
+/// This special index does NOT require the cluster to be built with OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_ALLOW_DISABLE_OPACITY_MICROMAPS.
+#define OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_CLUSTER_SKIP_OPACITY_MICROMAP ( -5 )
 
 /// Alignment requirement for opacity micromap array buffers
 #define OPTIX_OPACITY_MICROMAP_ARRAY_BUFFER_BYTE_ALIGNMENT 128ull
@@ -175,6 +180,7 @@ typedef enum OptixResult
     OPTIX_ERROR_ENTRY_SYMBOL_NOT_FOUND          = 7805,
     OPTIX_ERROR_LIBRARY_UNLOAD_FAILURE          = 7806,
     OPTIX_ERROR_DEVICE_OUT_OF_MEMORY            = 7807,
+    OPTIX_ERROR_INVALID_POINTER                 = 7808,
     OPTIX_ERROR_CUDA_ERROR                      = 7900,
     OPTIX_ERROR_INTERNAL_ERROR                  = 7990,
     OPTIX_ERROR_UNKNOWN                         = 7999,
@@ -224,6 +230,28 @@ typedef enum OptixDeviceProperty
     /// OptixDevicePropertyShaderExecutionReorderingFlags for documentation on the values
     /// that can be returned. sizeof( unsigned int )
     OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING = 0x200A,
+
+    /// Returns a flag specifying whether cooperative vector support is enabled for this
+    /// device. See OptixDevicePropertyCoopVecFlags for documentation on the values that
+    /// can be returned. sizeof( unsigned int )
+    OPTIX_DEVICE_PROPERTY_COOP_VEC = 0x200B,
+
+    /// Returns a flag specifying support for cluster acceleration structure builds.  See
+    /// OptixDevicePropertyClusterAccelFlags for documentation on the values
+    /// that can be returned. sizeof( unsigned int )
+    OPTIX_DEVICE_PROPERTY_CLUSTER_ACCEL = 0x2020,
+
+    /// Returns a maximum unique vertices per cluster in a cluster acceleration structure builds.
+    /// sizeof( unsigned int )
+    OPTIX_DEVICE_PROPERTY_LIMIT_MAX_CLUSTER_VERTICES = 0x2021,
+
+    /// Returns a maximum triangles per cluster in a cluster acceleration structure builds.
+    /// sizeof( unsigned int )
+    OPTIX_DEVICE_PROPERTY_LIMIT_MAX_CLUSTER_TRIANGLES = 0x2022,
+
+    /// Returns a maximum resolution per cluster in a structured cluster
+    /// acceleration structure builds. sizeof( unsigned int )
+    OPTIX_DEVICE_PROPERTY_LIMIT_MAX_STRUCTURED_GRID_RESOLUTION = 0x2023,
 } OptixDeviceProperty;
 
 /// Type of the callback function used for log messages.
@@ -293,6 +321,19 @@ typedef enum OptixDevicePropertyShaderExecutionReorderingFlags
     // Standard thread reordering is supported
     OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING_FLAG_STANDARD = 1 << 0,
 } OptixDevicePropertyShaderExecutionReorderingFlags;
+
+/// Flags used to interpret the result of #optixDeviceContextGetProperty() and
+/// OPTIX_DEVICE_PROPERTY_CLUSTER_ACCEL
+///
+/// \see #optixDeviceContextGetProperty()
+typedef enum OptixDevicePropertyClusterAccelFlags
+{
+    /// Cluster acceleration structure builds are not supported.
+    OPTIX_DEVICE_PROPERTY_CLUSTER_ACCEL_FLAG_NONE     = 0,
+
+    // Cluster acceleration structure builds are supported.
+    OPTIX_DEVICE_PROPERTY_CLUSTER_ACCEL_FLAG_STANDARD = 1 << 0,
+} OptixDevicePropertyClusterAccelFlags;
 
 /// Flags used by #OptixBuildInputTriangleArray::flags,
 /// #OptixBuildInputSphereArray::flags
@@ -731,6 +772,14 @@ typedef enum OptixPrimitiveType
     OPTIX_PRIMITIVE_TYPE_SPHERE                        = 0x2506,
     /// Bezier curve of degree 3 with circular cross-section.
     OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER            = 0x2507,
+    /// B-spline curve of degree 2 with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE_ROCAPS = 0x2508,
+    /// B-spline curve of degree 3 with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE_ROCAPS    = 0x2509,
+    /// CatmullRom curve with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_ROUND_CATMULLROM_ROCAPS       = 0x250A,
+    /// Bezier curve of degree 3 with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BEZIER_ROCAPS     = 0x250B,
     /// Triangle.
     OPTIX_PRIMITIVE_TYPE_TRIANGLE                      = 0x2531,
     /// Triangle with an applied displacement micromap.
@@ -758,6 +807,14 @@ typedef enum OptixPrimitiveTypeFlags
     OPTIX_PRIMITIVE_TYPE_FLAGS_SPHERE                       = 1 << 6,
     /// Bezier curve of degree 3 with circular cross-section.
     OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER           = 1 << 7,
+    /// B-spline curve of degree 2 with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_QUADRATIC_BSPLINE_ROCAPS = 1 << 8,
+    /// B-spline curve of degree 3 with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BSPLINE_ROCAPS   = 1 << 9,
+    /// CatmullRom curve with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CATMULLROM_ROCAPS      = 1 << 10,
+    /// Bezier curve of degree 3 with circular cross-section, using rocaps intersection.
+    OPTIX_PRIMITIVE_TYPE_FLAGS_ROUND_CUBIC_BEZIER_ROCAPS    = 1 << 11,
     /// Triangle.
     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE                     = 1 << 31,
     /// Triangle with an applied displacement micromap.
@@ -1044,6 +1101,13 @@ typedef struct OptixBuildInput
     };
 } OptixBuildInput;
 
+// Some 32-bit tools use this header. This static_assert fails for them because
+// the default enum size is 4 bytes, rather than 8, under 32-bit compilers.
+// This #ifndef allows them to disable the static assert.
+#if defined( __cplusplus ) && __cplusplus >= 201103L
+static_assert( sizeof( OptixBuildInput ) == 8 + 1024, "OptixBuildInput has wrong size" );
+#endif
+
 /// Relocation inputs.
 ///
 /// \see #optixAccelRelocate()
@@ -1063,15 +1127,6 @@ typedef struct OptixRelocateInput
         /// Inputs of any of the other types don't require any relocation data.
     };
 } OptixRelocateInput;
-
-// Some 32-bit tools use this header. This static_assert fails for them because
-// the default enum size is 4 bytes, rather than 8, under 32-bit compilers.
-// This #ifndef allows them to disable the static assert.
-
-// TODO Define a static assert for C/pre-C++-11
-#if defined( __cplusplus ) && __cplusplus >= 201103L
-static_assert( sizeof( OptixBuildInput ) == 8 + 1024, "OptixBuildInput has wrong size" );
-#endif
 
 /// Flags set on the #OptixInstance::flags.
 ///
@@ -1104,7 +1159,8 @@ typedef enum OptixInstanceFlags
 
     /// Force 4-state opacity micromaps to behave as 2-state opacity micromaps during traversal.
     OPTIX_INSTANCE_FLAG_FORCE_OPACITY_MICROMAP_2_STATE = 1u << 4,
-    /// Don't perform opacity micromap query for this instance. GAS must be built with ALLOW_DISABLE_OPACITY_MICROMAPS for this to be valid.
+    /// Don't perform opacity micromap query for this instance. Triangle GAS must be built with ALLOW_DISABLE_OPACITY_MICROMAPS for this to be valid.
+    /// Clusters in a GAS must be build with OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_ALLOW_DISABLE_OPACITY_MICROMAPS for this to be valid.
     /// This flag overrides FORCE_OPACTIY_MIXROMAP_2_STATE instance and ray flags.
     OPTIX_INSTANCE_FLAG_DISABLE_OPACITY_MICROMAPS = 1u << 5,
 
@@ -1161,14 +1217,19 @@ typedef enum OptixBuildFlags
     OPTIX_BUILD_FLAG_PREFER_FAST_BUILD = 1u << 3,
 
     /// Allow random access to build input vertices
-    /// See optixGetTriangleVertexData
-    ///     optixGetLinearCurveVertexData
-    ///     optixGetQuadraticBSplineVertexData
-    ///     optixGetCubicBSplineVertexData
-    ///     optixGetCatmullRomVertexData
-    ///     optixGetRibbonVertexData
-    ///     optixGetRibbonNormal
-    ///     optixGetSphereData
+    /// See optixGetTriangleVertexDataFromHandle
+    ///     optixGetLinearCurveVertexDataFromHandle
+    ///     optixGetQuadraticBSplineVertexDataFromHandle
+    ///     optixGetCubicBSplineVertexDataFromHandle
+    ///     optixGetCatmullRomVertexDataFromHandle
+    ///     optixGetCubicBezierVertexDataFromHandle
+    ///     optixGetQuadraticBSplineRocapsVertexDataFromHandle
+    ///     optixGetCubicBSplineRocapsVertexDataFromHandle
+    ///     optixGetCatmullRomRocapsVertexDataFromHandle
+    ///     optixGetCubicBezierRocapsVertexDataFromHandle
+    ///     optixGetRibbonVertexDataFromHandle
+    ///     optixGetRibbonNormalFromHandle
+    ///     optixGetSphereDataFromHandle
     OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS = 1u << 4,
 
     /// Allow random access to instances
@@ -1494,7 +1555,6 @@ typedef struct OptixSRTData
     /// @}
 } OptixSRTData;
 
-// TODO Define a static assert for C/pre-C++-11
 #if defined( __cplusplus ) && __cplusplus >= 201103L
 static_assert( sizeof( OptixSRTData ) == 16 * 4, "OptixSRTData has wrong size" );
 #endif
@@ -1539,7 +1599,6 @@ typedef struct OptixSRTMotionTransform
     OptixSRTData srtData[2];
 } OptixSRTMotionTransform;
 
-// TODO Define a static assert for C/pre-C++-11
 #if defined( __cplusplus ) && __cplusplus >= 201103L
 static_assert( sizeof( OptixSRTMotionTransform ) == 8 + 12 + 12 + 2 * 16 * 4, "OptixSRTMotionTransform has wrong size" );
 #endif
@@ -1556,6 +1615,269 @@ typedef enum OptixTraversableType
     /// SRT motion transform. \see #OptixSRTMotionTransform
     OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM = 0x21C3,
 } OptixTraversableType;
+
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+///// Cluster AS build
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+/// Flags affect all builds of a multi indirect cluster build
+typedef enum OptixClusterAccelBuildFlags
+{
+    OPTIX_CLUSTER_ACCEL_BUILD_FLAG_NONE                    = 0,
+    OPTIX_CLUSTER_ACCEL_BUILD_FLAG_PREFER_FAST_TRACE       = 1 << 0,
+    OPTIX_CLUSTER_ACCEL_BUILD_FLAG_PREFER_FAST_BUILD       = 1 << 1,
+    OPTIX_CLUSTER_ACCEL_BUILD_FLAG_ALLOW_OPACITY_MICROMAPS = 1 << 2
+} OptixClusterAccelBuildFlags;
+
+/// Flags for building CLAS
+typedef enum OptixClusterAccelClusterFlags
+{
+    OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_NONE                            = 0,
+    /// Similar to the 'ALLOW_DISABLE_OPACITY_MICROMAPS' build flag of regular triangle GAS builds.
+    /// This flag is required if the CLAS is in an instance with the OPTIX_INSTANCE_FLAG_DISABLE_OPACITY_MICROMAPS flag set.
+    OPTIX_CLUSTER_ACCEL_CLUSTER_FLAG_ALLOW_DISABLE_OPACITY_MICROMAPS = 1 << 0,
+} OptixClusterAccelClusterFlags;
+
+typedef enum OptixClusterAccelPrimitiveFlags
+{
+    OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_NONE                          = 0,
+    OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_DISABLE_TRIANGLE_FACE_CULLING = 1 << 0,
+    OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_REQUIRE_SINGLE_ANYHIT_CALL    = 1 << 1,
+    OPTIX_CLUSTER_ACCEL_PRIMITIVE_FLAG_DISABLE_ANYHIT                = 1 << 2,
+} OptixClusterAccelPrimitiveFlags;
+
+// Build type for the multi indirect cluster build
+typedef enum OptixClusterAccelBuildType
+{
+    OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS      = 0x2545,
+    OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES  = 0x2546,
+    OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_TRIANGLES = 0x2547,
+    OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TEMPLATES  = 0x2548,
+    OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_GRIDS     = 0x2549
+} OptixClusterAccelBuildType;
+
+typedef enum OptixClusterAccelBuildMode
+{
+    OPTIX_CLUSTER_ACCEL_BUILD_MODE_IMPLICIT_DESTINATIONS = 0,
+    OPTIX_CLUSTER_ACCEL_BUILD_MODE_EXPLICIT_DESTINATIONS = 1,
+    OPTIX_CLUSTER_ACCEL_BUILD_MODE_GET_SIZES             = 2
+} OptixClusterAccelBuildMode;
+
+/// helper enum where values match the byte count of the corresponding index format, allowing usage of enum value when specifying byte count
+typedef enum OptixClusterAccelIndicesFormat
+{
+    OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_8BIT  = 1,
+    OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_16BIT = 2,
+    OPTIX_CLUSTER_ACCEL_INDICES_FORMAT_32BIT = 4,
+} OptixClusterAccelIndicesFormat;
+
+typedef struct OptixClusterAccelBuildModeDescImplicitDest
+{
+    /// alignment of outputBuffer must match result type.
+    ///    Clusters: 128 bytes
+    ///   Templates: 32 bytes
+    ///       GASes: 128 bytes, see OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT
+    CUdeviceptr  outputBuffer;                // 128-byte aligned, see OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT
+    size_t       outputBufferSizeInBytes;     // size of outputHandlesBuffer is outputHandlesStrideInBytes * number of inputs specified with either argCount or maxArgCount
+    CUdeviceptr  tempBuffer;                  // 128-byte aligned, see OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT
+    size_t       tempBufferSizeInBytes;
+
+    CUdeviceptr  outputHandlesBuffer;         // TraversableHandle for GAS, pointer for cluster and template outputs
+    unsigned int outputHandlesStrideInBytes;  // minimum 8, 0->8
+    CUdeviceptr  outputSizesBuffer;           // optional, uint32 array (4 byte aligned?)
+    unsigned int outputSizesStrideInBytes;    // minimum 4, 0->4
+} OptixClusterAccelBuildModeDescImplicitDest;
+
+typedef struct OptixClusterAccelBuildModeDescExplicitDest
+{
+    CUdeviceptr  tempBuffer;
+    size_t       tempBufferSizeInBytes;
+    CUdeviceptr  destAddressesBuffer;         // entries must be aligned according to the output type
+    unsigned int destAddressesStrideInBytes;  // minimum 8, 0->8
+
+    CUdeviceptr  outputHandlesBuffer;         // TraversableHandle for GAS, pointer for cluster and template outputs, can be the same as destAddresses in which case they will overwrite the input
+    unsigned int outputHandlesStrideInBytes;  // minimum 8, 0->8
+    CUdeviceptr  outputSizesBuffer;           // optional, uint32 array
+    unsigned int outputSizesStrideInBytes;    // minimum 4, 0->4
+} OptixClusterAccelBuildModeDescExplicitDest;
+
+typedef struct OptixClusterAccelBuildModeDescGetSize
+{
+    CUdeviceptr  outputSizesBuffer;         // required, uint32 array
+    unsigned int outputSizesStrideInBytes;  // minimum 4, 0->4
+    CUdeviceptr  tempBuffer;
+    size_t       tempBufferSizeInBytes;
+} OptixClusterAccelBuildModeDescGetSize;
+
+typedef struct OptixClusterAccelBuildInputTriangles
+{
+    OptixClusterAccelBuildFlags flags;
+
+    /// max number of OptixClusterAccelBuildInputTrianglesArgs provided at build time for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES and OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_TRIANGLES
+    /// max number of OptixClusterAccelBuildInputTemplatesArgs provided at build time for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TEMPLATES
+    unsigned int maxArgCount;
+    OptixVertexFormat vertexFormat;             // OptixVertexFormat (see documentation for supported formats)
+    unsigned int maxSbtIndexValue;              // The highest used sbt index over all clusters;
+                                                //  this must include the base sbt offset (::basePrimitiveInfo), any potential per primitive offset (::primitiveInfoBuffer), as well as a potential offset at template instantiation (OptixClusterAccelBuildInputTemplatesArgs::sbtIndexOffset)
+    unsigned int maxUniqueSbtIndexCountPerArg;  // Number of unique SBT indices per cluster. If the cluster has the same
+                                                //  SBT index for all its triangles, this value is 1.
+
+    unsigned int maxTriangleCountPerArg;        // upper bound on the number of triangles per Arg
+    unsigned int maxVertexCountPerArg;          // upper bound on the number of vertices per Arg
+    unsigned int maxTotalTriangleCount;         // optional, upper bound on the number of triangles over all Args, maxTriangleCountPerArg * maxArgCount otherwise
+    unsigned int maxTotalVertexCount;           // optional, upper bound on the number of vertices over all Args, maxVertexCountPerArg * maxArgCount otherwise
+    unsigned int minPositionTruncateBitCount;   // lower bound on the number of bits being truncated of the vertex positions.
+} OptixClusterAccelBuildInputTriangles;
+
+typedef struct OptixClusterAccelBuildInputGrids
+{
+    OptixClusterAccelBuildFlags flags;
+    unsigned int                maxArgCount;  // max number of OptixClusterAccelBuildInputGridsArgs provided at build time for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_GRIDS
+
+    OptixVertexFormat vertexFormat;      // OptixVertexFormat (see documentation for supported formats)
+    unsigned int      maxSbtIndexValue;  // the highest used sbt index over all clusters.
+                                         //  this must include the base sbt offset (::basePrimitiveInfo), any potential per primitive offset (::primitiveInfoBuffer), as well as a potential offset at template instantiation (OptixClusterAccelBuildInputTemplatesArgs::sbtIndexOffset)
+
+
+    unsigned int maxWidth;   // the maximum number of edge segments along the width of the grid
+    unsigned int maxHeight;  // the maximum number of edge segments along the height of the grid
+} OptixClusterAccelBuildInputGrids;
+
+typedef struct OptixClusterAccelBuildInputClusters
+{
+    OptixClusterAccelBuildFlags flags;
+    unsigned int                maxArgCount;  // max number of OptixClusterAccelBuildInputClustersArgs provided at build time for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS
+
+    unsigned int                maxTotalClusterCount;
+    unsigned int                maxClusterCountPerArg;
+} OptixClusterAccelBuildInputClusters;
+
+typedef struct OptixClusterAccelPrimitiveInfo
+{
+    unsigned int sbtIndex       : 24;
+    unsigned int reserved       :  5;
+    unsigned int primitiveFlags :  3; // combination of OptixClusterAccelPrimitiveFlags
+} OptixClusterAccelPrimitiveInfo;
+
+/// Reserved value for cluster IDs in Args
+typedef enum OptixClusterIDValues {
+    OPTIX_CLUSTER_ID_INVALID = 0xFFFFFFFFu,
+} OptixClusterIDValues;
+
+/// Device data, args provided for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES builds and OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_TRIANGLES builds
+typedef struct OptixClusterAccelBuildInputTrianglesArgs
+{
+    unsigned int clusterId;     // 32-bit user-defined ID, for template creation acts as the baseClusterId and can be offset at template instantiation (see OptixClusterAccelBuildInputTemplatesArgs::clusterIdOffset)
+    unsigned int clusterFlags;  // combination of OptixClusterAccelClusterFlags
+
+    // packing the following values into a single 32b value
+    unsigned int triangleCount              : 9;  // max value 256
+    unsigned int vertexCount                : 9;  // max value 256
+    /// Number of LSB in mantissa that are dropped (0 means don't drop any) for float32 positions. Other formats are first converted to float32 before dropping bits.
+    /// Builder will drop bits when building CLAS / instantiating cluster templates (no need to truncate the input before build).
+    unsigned int positionTruncateBitCount   : 6;
+    unsigned int indexFormat                : 4;  // one of OptixClusterAccelIndicesFormat, 1, 2, or 4 bits-wide indices
+    unsigned int opacityMicromapIndexFormat : 4;  // one of OptixClusterAccelIndicesFormat, 1, 2, or 4 bits-wide indices
+
+    // Applied to all triangles in cluster. Additional per triangle flags can be specified in PrimitiveInfoBuffer.
+    OptixClusterAccelPrimitiveInfo basePrimitiveInfo;
+
+    unsigned short indexBufferStrideInBytes;  // 0 -> natural stride on all these
+    unsigned short vertexBufferStrideInBytes;
+    unsigned short primitiveInfoBufferStrideInBytes;
+    unsigned short opacityMicromapIndexBufferStrideInBytes;
+
+    CUdeviceptr indexBuffer;
+    /// vertexBuffer is mandatory when using OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES.
+    /// Optional with OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_TRIANGLES
+    /// and when specified provide example "hint" vertices for templates; actual vertices are specified at template instantiation.
+    /// It is typically useful to provide vertices for template creation in scenarios such as animation, where the relative locality of vertices is expected to be similar between the template creation and instantiation
+    CUdeviceptr vertexBuffer;
+    CUdeviceptr primitiveInfoBuffer;          // Optional, per primitive array of OptixClusterAccelPrimitiveInfo
+    CUdeviceptr opacityMicromapArray;
+    CUdeviceptr opacityMicromapIndexBuffer;
+
+    /// Optional with OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_TRIANGLES, 32-byte-aligned pointer to OptixAabb, one per cluster, limiting the extent of each cluster
+    ///  Vertices provided for template instantiation must not be outside the bounding box. Providing a bounding box may improve compression (reduced CLAS size) as well as trace performance.
+    /// Ignored for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES
+    CUdeviceptr instantiationBoundingBoxLimit;
+} OptixClusterAccelBuildInputTrianglesArgs;
+
+/// Device data, args provided for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_GRIDS builds
+typedef struct OptixClusterAccelBuildInputGridsArgs
+{
+    unsigned int baseClusterId;   // 32-bit user-defined ID, serves as a base value for the template and can be offset at template instantiation (see OptixClusterAccelBuildInputTemplatesArgs::clusterIdOffset)
+    unsigned int clusterFlags;    // combination of OptixClusterAccelClusterFlags
+
+    // Applied to all triangles in cluster
+    OptixClusterAccelPrimitiveInfo basePrimitiveInfo;
+
+    // packing the following values into a single 32b value
+    unsigned int positionTruncateBitCount :  6;
+    unsigned int reserved                 : 26;
+
+    // packing the following values into a single 32b value
+    unsigned char  dimensions[2];
+    unsigned short reserved2;
+} OptixClusterAccelBuildInputGridsArgs;
+
+/// Device data, args provided for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TEMPLATES builds
+typedef struct OptixClusterAccelBuildInputTemplatesArgs
+{
+    unsigned int clusterIdOffset;  // offset applied to template baseClusterId, effective clusterId = clusterTemplate.baseClusterId + clusterIdOffset. Either may be 0.
+
+    unsigned int sbtIndexOffset;   // offset to base sbtIndex from template creation (which may define a constant or per-triangle base sbtIndex), final sbt index is also limited to fit into 24b
+
+    CUdeviceptr  clusterTemplate;  // opaque pointer to the template
+    CUdeviceptr  vertexBuffer;     // the vertex data to use to instantiate the template; vertex order must match that of template creation. For templates created from grids, see documentation.
+    unsigned int vertexStrideInBytes;
+    unsigned int reserved;
+} OptixClusterAccelBuildInputTemplatesArgs;
+
+/// Device data, args provided for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS builds
+typedef struct OptixClusterAccelBuildInputClustersArgs
+{
+    unsigned int clusterHandlesCount;
+    unsigned int clusterHandlesBufferStrideInBytes;
+    /// The clusterHandlesBuffer can come directly from CLAS builds output via
+    ///  OptixClusterAccelBuildModeDescImplicitDest::outputHandlesBuffer or
+    ///  OptixClusterAccelBuildModeDescExplicitDest::outputHandlesBuffer
+    CUdeviceptr  clusterHandlesBuffer;
+} OptixClusterAccelBuildInputClustersArgs;
+
+typedef struct OptixClusterAccelBuildInput
+{
+    OptixClusterAccelBuildType type;
+
+    union
+    {
+        OptixClusterAccelBuildInputClusters  clusters;    // used for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_GASES_FROM_CLUSTERS type builds
+        OptixClusterAccelBuildInputTriangles triangles;   // used for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TRIANGLES, OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_TRIANGLES, OPTIX_CLUSTER_ACCEL_BUILD_TYPE_CLUSTERS_FROM_TEMPLATES type builds
+        OptixClusterAccelBuildInputGrids     grids;       // used for OPTIX_CLUSTER_ACCEL_BUILD_TYPE_TEMPLATES_FROM_GRIDS type builds
+    };
+} OptixClusterAccelBuildInput;
+
+typedef struct OptixClusterAccelBuildModeDesc
+{
+    OptixClusterAccelBuildMode mode;
+    union
+    {
+        OptixClusterAccelBuildModeDescImplicitDest implicitDest;
+        OptixClusterAccelBuildModeDescExplicitDest explicitDest;
+        OptixClusterAccelBuildModeDescGetSize      getSize;
+    };
+} OptixClusterAccelBuildModeDesc;
+
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+///// Denoiser
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 
 /// Pixel formats used by the denoiser.
 ///
@@ -1602,27 +1924,27 @@ typedef struct OptixImage2D
 /// \see #optixDenoiserCreate
 typedef enum OptixDenoiserModelKind
 {
-    /// Use the built-in model appropriate for low dynamic range input.
-    OPTIX_DENOISER_MODEL_KIND_LDR = 0x2322,
-
-    /// Use the built-in model appropriate for high dynamic range input.
-    OPTIX_DENOISER_MODEL_KIND_HDR = 0x2323,
-
-    /// Use the built-in model appropriate for high dynamic range input and support for AOVs
+    /// Built-in model for denoising single image.
     OPTIX_DENOISER_MODEL_KIND_AOV = 0x2324,
 
-    /// Use the built-in model appropriate for high dynamic range input, temporally stable
-    OPTIX_DENOISER_MODEL_KIND_TEMPORAL = 0x2325,
 
-    /// Use the built-in model appropriate for high dynamic range input and support for AOVs, temporally stable
+    /// Built-in model for denoising image sequence, temporally stable.
     OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV = 0x2326,
 
-    /// Use the built-in model appropriate for high dynamic range input and support for AOVs, upscaling 2x
+    /// Built-in model for denoising single image upscaling (supports AOVs).
     OPTIX_DENOISER_MODEL_KIND_UPSCALE2X = 0x2327,
 
-    /// Use the built-in model appropriate for high dynamic range input and support for AOVs, upscaling 2x,
-    /// temporally stable
-    OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X = 0x2328
+    /// Built-in model for denoising image sequence upscaling, temporally stable (supports AOVs).
+    OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X = 0x2328,
+
+    /// Deprecated. Use OPTIX_DENOISER_MODEL_KIND_AOV.
+    /// When used, internally mapped to OPTIX_DENOISER_MODEL_KIND_AOV.
+    OPTIX_DENOISER_MODEL_KIND_LDR = 0x2322,
+    OPTIX_DENOISER_MODEL_KIND_HDR = 0x2323,
+
+    /// Deprecated. Use OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV.
+    OPTIX_DENOISER_MODEL_KIND_TEMPORAL = 0x2325
+
 } OptixDenoiserModelKind;
 
 /// Alpha denoising mode
@@ -1779,6 +2101,14 @@ typedef struct OptixDenoiserSizes
     size_t internalGuideLayerPixelSizeInBytes;
 } OptixDenoiserSizes;
 
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+///// Traversal and Module/Pipeline/SBT
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+
 /// Ray flags passed to the device function #optixTrace().  These affect the behavior of
 /// traversal per invocation.
 ///
@@ -1833,7 +2163,7 @@ typedef enum OptixRayFlags
     /// OPTIX_RAY_FLAG_ENFORCE_ANYHIT, OPTIX_RAY_FLAG_DISABLE_ANYHIT.
     OPTIX_RAY_FLAG_CULL_ENFORCED_ANYHIT = 1u << 7,
 
-    /// Force 4-state opacity micromaps to behave as 2-state opactiy micromaps during traversal.
+    /// Force 4-state opacity micromaps to behave as 2-state opacity micromaps during traversal.
     OPTIX_RAY_FLAG_FORCE_OPACITY_MICROMAP_2_STATE = 1u << 10,
 } OptixRayFlags;
 
@@ -1850,6 +2180,16 @@ typedef enum OptixTransformType
     OPTIX_TRANSFORM_TYPE_SRT_MOTION_TRANSFORM    = 3, ///< \see #OptixSRTMotionTransform
     OPTIX_TRANSFORM_TYPE_INSTANCE                = 4, ///< \see #OptixInstance
 } OptixTransformType;
+
+/// Hit Object
+/// Struct to store the data collected in a hit object during traversal in an internal format
+/// using \c optixHitObjectGetTraverseData().
+/// The hit object can be reconstructed using that data at a later point with
+/// \c optixMakeHitObjectWithTraverseData().
+typedef struct OptixTraverseData
+{
+    unsigned int data[20];
+} OptixTraverseData;
 
 /// Specifies the set of valid traversable graphs that may be
 /// passed to invocation of #optixTrace(). Flags may be bitwise combined.
@@ -2063,6 +2403,21 @@ typedef struct OptixModuleCompileOptions
 
 } OptixModuleCompileOptions;
 
+/// Specifies the options for retrieving an intersection program for a built-in primitive type.
+/// The primitive type must not be OPTIX_PRIMITIVE_TYPE_CUSTOM.
+///
+/// \see #optixBuiltinISModuleGet()
+typedef struct OptixBuiltinISOptions
+{
+    OptixPrimitiveType        builtinISModuleType;
+    /// Boolean value indicating whether vertex motion blur is used (but not motion transform blur).
+    int                       usesMotionBlur;
+    /// Build flags, see OptixBuildFlags.
+    unsigned int              buildFlags;
+    /// End cap properties of curves, see OptixCurveEndcapFlags, 0 for non-curve types.
+    unsigned int              curveEndcapFlags;
+} OptixBuiltinISOptions;
+
 /// Distinguishes different kinds of program groups.
 typedef enum OptixProgramGroupKind
 {
@@ -2267,8 +2622,11 @@ typedef struct OptixPipelineCompileOptions
     /// Setting to zero corresponds to enabling OPTIX_PRIMITIVE_TYPE_FLAGS_CUSTOM and OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE.
     unsigned int usesPrimitiveTypeFlags;
 
-    /// Boolean value indicating whether opacity micromaps could be used
+    /// Boolean value indicating whether opacity micromaps may used
     int allowOpacityMicromaps;
+
+    /// Boolean value indicating whether clusters (cluster acceleration structure) may used
+    int allowClusteredGeometry;
 } OptixPipelineCompileOptions;
 
 /// Link options for a pipeline
@@ -2344,6 +2702,86 @@ typedef struct OptixStackSizes
 
 } OptixStackSizes;
 
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+///// Cooperative Vector
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+/// Flags used to interpret the result of #optixDeviceContextGetProperty() and
+/// OPTIX_DEVICE_PROPERTY_COOP_VEC
+///
+/// \see #optixDeviceContextGetProperty()
+typedef enum OptixDevicePropertyCoopVecFlags
+{
+    /// Any use of cooperative vector host APIs or device intrinsics will result in an
+    /// error.
+    OPTIX_DEVICE_PROPERTY_COOP_VEC_FLAG_NONE     = 0,
+
+    // Standard cooperative vector features are supported
+    OPTIX_DEVICE_PROPERTY_COOP_VEC_FLAG_STANDARD = 1 << 0,
+} OptixDevicePropertyCoopVecFlags;
+
+typedef enum OptixCoopVecElemType
+{
+    OPTIX_COOP_VEC_ELEM_TYPE_UNKNOWN = 0x2A00,
+    /// 16 bit float
+    OPTIX_COOP_VEC_ELEM_TYPE_FLOAT16 = 0x2A01,
+    /// 32 bit float
+    OPTIX_COOP_VEC_ELEM_TYPE_FLOAT32 = 0x2A03,
+    /// 8 bit unsigned integer
+    OPTIX_COOP_VEC_ELEM_TYPE_UINT8   = 0x2A04,
+    /// 8 bit signed integer
+    OPTIX_COOP_VEC_ELEM_TYPE_INT8    = 0x2A05,
+    /// 32 bit unsigned integer
+    OPTIX_COOP_VEC_ELEM_TYPE_UINT32  = 0x2A08,
+    /// 32 bit signed integer
+    OPTIX_COOP_VEC_ELEM_TYPE_INT32   = 0x2A09,
+    /// FLOAT8 type with 4 bits exponent, 3 bits mantissa. Only supported as the inputInterpretation and matrixElementType.
+    OPTIX_COOP_VEC_ELEM_TYPE_FLOAT8_E4M3 = 0x2A0A,
+    /// FLOAT8 type with 5 bits exponent, 2 bits mantissa. Only supported as the inputInterpretation and matrixElementType.
+    OPTIX_COOP_VEC_ELEM_TYPE_FLOAT8_E5M2 = 0x2A0B,
+} OptixCoopVecElemType;
+
+typedef enum OptixCoopVecMatrixLayout
+{
+    OPTIX_COOP_VEC_MATRIX_LAYOUT_ROW_MAJOR    = 0x2A40,
+    OPTIX_COOP_VEC_MATRIX_LAYOUT_COLUMN_MAJOR = 0x2A41,
+    OPTIX_COOP_VEC_MATRIX_LAYOUT_INFERENCING_OPTIMAL = 0x2A42,
+    OPTIX_COOP_VEC_MATRIX_LAYOUT_TRAINING_OPTIMAL    = 0x2A43,
+} OptixCoopVecMatrixLayout;
+
+/// Each matrix's offset from the base address is expressed with offsetInBytes. This
+/// allows for non-uniform matrices to be tightly packed.
+///
+/// The rowColumnStrideInBytes is ignored if the layout is either
+/// OPTIX_COOP_VEC_MATRIX_LAYOUT_INFERENCING_OPTIMAL or
+/// OPTIX_COOP_VEC_MATRIX_LAYOUT_TRAINING_OPTIMAL
+typedef struct OptixCoopVecMatrixDescription
+{
+    unsigned int             N;
+    unsigned int             K;
+    unsigned int             offsetInBytes;
+    OptixCoopVecElemType     elementType;
+    OptixCoopVecMatrixLayout layout;
+    unsigned int             rowColumnStrideInBytes;
+    unsigned int             sizeInBytes;
+} OptixCoopVecMatrixDescription;
+
+typedef struct OptixNetworkDescription
+{
+    OptixCoopVecMatrixDescription* layers;
+    unsigned int                   numLayers;
+} OptixNetworkDescription;
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+///// Function table
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+
 /// Options that can be passed to \c optixQueryFunctionTable()
 typedef enum OptixQueryFunctionTableOptions
 {
@@ -2359,21 +2797,6 @@ typedef OptixResult( OptixQueryFunctionTable_t )( int          abiId,
                                                   const void** /*optionValues*/,
                                                   void*  functionTable,
                                                   size_t sizeOfTable );
-
-/// Specifies the options for retrieving an intersection program for a built-in primitive type.
-/// The primitive type must not be OPTIX_PRIMITIVE_TYPE_CUSTOM.
-///
-/// \see #optixBuiltinISModuleGet()
-typedef struct OptixBuiltinISOptions
-{
-    OptixPrimitiveType        builtinISModuleType;
-    /// Boolean value indicating whether vertex motion blur is used (but not motion transform blur).
-    int                       usesMotionBlur;
-    /// Build flags, see OptixBuildFlags.
-    unsigned int              buildFlags;
-    /// End cap properties of curves, see OptixCurveEndcapFlags, 0 for non-curve types.
-    unsigned int              curveEndcapFlags;
-} OptixBuiltinISOptions;
 
 
 

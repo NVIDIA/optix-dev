@@ -322,16 +322,17 @@ static __forceinline__ __device__ void optixGetInterpolatedTransformationFromHan
     }
 }
 
-// Returns the world-to-object transformation matrix resulting from the current transform stack and current ray time.
-static __forceinline__ __device__ void optixGetWorldToObjectTransformMatrix( float4& m0, float4& m1, float4& m2 )
+// Returns the world-to-object transformation matrix resulting from the transform stack and ray time of the given hit object.
+template<typename HitState>
+static __forceinline__ __device__ void optixGetWorldToObjectTransformMatrix( const HitState& hs, float4& m0, float4& m1, float4& m2 )
 {
-    const unsigned int size = optixGetTransformListSize();
-    const float        time = optixGetRayTime();
+    const unsigned int size = hs.getTransformListSize();
+    const float        time = hs.getRayTime();
 
 #pragma unroll 1
     for( unsigned int i = 0; i < size; ++i )
     {
-        OptixTraversableHandle handle = optixGetTransformListHandle( i );
+        OptixTraversableHandle handle = hs.getTransformListHandle( i );
 
         float4 trf0, trf1, trf2;
         optixGetInterpolatedTransformationFromHandle( trf0, trf1, trf2, handle, time, /*objectToWorld*/ false );
@@ -353,16 +354,17 @@ static __forceinline__ __device__ void optixGetWorldToObjectTransformMatrix( flo
     }
 }
 
-// Returns the object-to-world transformation matrix resulting from the current transform stack and current ray time.
-static __forceinline__ __device__ void optixGetObjectToWorldTransformMatrix( float4& m0, float4& m1, float4& m2 )
+// Returns the object-to-world transformation matrix resulting from the transform stack and ray time of the given hit object.
+template<typename HitState>
+static __forceinline__ __device__ void optixGetObjectToWorldTransformMatrix( const HitState& hs, float4& m0, float4& m1, float4& m2 )
 {
-    const int   size = optixGetTransformListSize();
-    const float time = optixGetRayTime();
+    const int   size = hs.getTransformListSize();
+    const float time = hs.getRayTime();
 
 #pragma unroll 1
     for( int i = size - 1; i >= 0; --i )
     {
-        OptixTraversableHandle handle = optixGetTransformListHandle( i );
+        OptixTraversableHandle handle = hs.getTransformListHandle( i );
 
         float4 trf0, trf1, trf2;
         optixGetInterpolatedTransformationFromHandle( trf0, trf1, trf2, handle, time, /*objectToWorld*/ true );

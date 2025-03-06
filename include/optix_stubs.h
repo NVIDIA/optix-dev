@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2021 NVIDIA Corporation.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -533,9 +533,14 @@ inline OptixResult optixLaunch( OptixPipeline                  pipeline,
     return g_optixFunctionTable.optixLaunch( pipeline, stream, pipelineParams, pipelineParamsSize, sbt, width, height, depth );
 }
 
-inline OptixResult optixDenoiserCreate( OptixDeviceContext context, const OptixDenoiserOptions* options, OptixDenoiser* returnHandle )
+inline OptixResult optixDenoiserCreate( OptixDeviceContext context, OptixDenoiserModelKind modelKind, const OptixDenoiserOptions* options, OptixDenoiser* returnHandle )
 {
-    return g_optixFunctionTable.optixDenoiserCreate( context, options, returnHandle );
+    return g_optixFunctionTable.optixDenoiserCreate( context, modelKind, options, returnHandle );
+}
+
+inline OptixResult optixDenoiserCreateWithUserModel( OptixDeviceContext context, const void* data, size_t dataSizeInBytes, OptixDenoiser* returnHandle )
+{
+    return g_optixFunctionTable.optixDenoiserCreateWithUserModel( context, data, dataSizeInBytes, returnHandle );
 }
 
 inline OptixResult optixDenoiserDestroy( OptixDenoiser handle )
@@ -564,27 +569,22 @@ inline OptixResult optixDenoiserSetup( OptixDenoiser denoiser,
                                                     denoiserStateSizeInBytes, scratch, scratchSizeInBytes );
 }
 
-inline OptixResult optixDenoiserInvoke( OptixDenoiser              handle,
-                                        CUstream                   stream,
-                                        const OptixDenoiserParams* params,
-                                        CUdeviceptr                denoiserData,
-                                        size_t                     denoiserDataSize,
-                                        const OptixImage2D*        inputLayers,
-                                        unsigned int               numInputLayers,
-                                        unsigned int               inputOffsetX,
-                                        unsigned int               inputOffsetY,
-                                        const OptixImage2D*        outputLayer,
-                                        CUdeviceptr                scratch,
-                                        size_t                     scratchSizeInBytes )
+inline OptixResult optixDenoiserInvoke( OptixDenoiser                   handle,
+                                        CUstream                        stream,
+                                        const OptixDenoiserParams*      params,
+                                        CUdeviceptr                     denoiserData,
+                                        size_t                          denoiserDataSize,
+                                        const OptixDenoiserGuideLayer*  guideLayer,
+                                        const OptixDenoiserLayer*       layers,
+                                        unsigned int                    numLayers,
+                                        unsigned int                    inputOffsetX,
+                                        unsigned int                    inputOffsetY,
+                                        CUdeviceptr                     scratch,
+                                        size_t                          scratchSizeInBytes )
 {
     return g_optixFunctionTable.optixDenoiserInvoke( handle, stream, params, denoiserData, denoiserDataSize,
-                                                     inputLayers, numInputLayers, inputOffsetX, inputOffsetY,
-                                                     outputLayer, scratch, scratchSizeInBytes );
-}
-
-inline OptixResult optixDenoiserSetModel( OptixDenoiser handle, OptixDenoiserModelKind kind, void* data, size_t sizeInBytes )
-{
-    return g_optixFunctionTable.optixDenoiserSetModel( handle, kind, data, sizeInBytes );
+                                                     guideLayer, layers, numLayers,
+                                                     inputOffsetX, inputOffsetY, scratch, scratchSizeInBytes );
 }
 
 inline OptixResult optixDenoiserComputeIntensity( OptixDenoiser       handle,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2020 NVIDIA Corporation.  All rights reserved.
  *
  * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
  * rights in and to this software, related documentation and any modifications thereto.
@@ -304,8 +304,8 @@ OptixResult optixPipelineSetStackSize( OptixPipeline pipeline,
 /// \param[in] context
 /// \param[in] moduleCompileOptions
 /// \param[in] pipelineCompileOptions All modules in a pipeline need to use the same values for the pipeline compile options.
-/// \param[in] PTX
-/// \param[in] PTXsize
+/// \param[in] PTX                    Pointer to the PTX input string.
+/// \param[in] PTXsize                Parsing proceeds up to PTXsize characters, or the first NUL byte, whichever occurs first.
 /// \param[out] logString             Information will be written to this string. If logStringSize > 0 logString will be null terminated.
 /// \param[in,out] logStringSize
 /// \param[out] module
@@ -326,6 +326,15 @@ OptixResult optixModuleCreateFromPTX( OptixDeviceContext                 context
 ///
 /// Thread safety: A module must not be destroyed while it is still in use by concurrent API calls in other threads.
 OptixResult optixModuleDestroy( OptixModule module );
+
+/// Returns a module containing the intersection program for the built-in primitive type specified
+/// by the builtinISOptions.  This module must be used as the moduleIS for the OptixProgramGroupHitgroup
+/// in any SBT record for that primitive type.  (The entryFunctionNameIS should be null.)
+OptixResult optixBuiltinISModuleGet( OptixDeviceContext                 context,
+                                     const OptixModuleCompileOptions*   moduleCompileOptions,
+                                     const OptixPipelineCompileOptions* pipelineCompileOptions,
+                                     const OptixBuiltinISOptions*       builtinISOptions,
+                                     OptixModule*                       builtinModule );
 
 //@}
 /// \defgroup optix_host_api_program_groups Program groups
@@ -445,8 +454,6 @@ OptixResult optixAccelComputeMemoryUsage( OptixDeviceContext            context,
 /// \param[in] outputBufferSizeInBytes
 /// \param[out] outputHandle
 /// \param[out] emittedProperties        types of requested properties and output buffers
-///                                      OPTIX_PROPERTY_TYPE_AABBS is currently not supported
-///                                      and must be requested via optixAccelEmitProperties
 /// \param[in] numEmittedProperties      number of post-build properties to populate (may be zero)
 OptixResult optixAccelBuild( OptixDeviceContext            context,
                              CUstream                      stream,
@@ -560,7 +567,7 @@ OptixResult optixAccelCompact( OptixDeviceContext      context,
                                OptixTraversableHandle* outputHandle );
 
 /// \param[in] onDevice
-/// \param[in] pointer            pointer to traversalbe allocated in OptixDeviceContext. This pointer must be a multiple of OPTIX_TRANSFORM_BYTE_ALIGNMENT
+/// \param[in] pointer            pointer to traversable allocated in OptixDeviceContext. This pointer must be a multiple of OPTIX_TRANSFORM_BYTE_ALIGNMENT
 /// \param[in] traversableType    Type of OptixTraversableHandle to create
 /// \param[out] traversableHandle traversable handle. traversableHandle must be in host memory
 OptixResult optixConvertPointerToTraversableHandle( OptixDeviceContext      onDevice,
@@ -596,6 +603,17 @@ OptixResult optixDenoiserDestroy( OptixDenoiser denoiser );
 
 /// Computes the GPU memory resources required to execute the denoiser.
 ///
+/// Memory for state and scratch buffers must be allocated with the sizes in 'returnSizes' and scratch memory
+/// passed to optixDenoiserSetup, optixDenoiserInvoke and optixDenoiserComputeIntensity.
+/// For tiled denoising an overlap area must be added to each tile on all sides which increases the amount of
+/// memory needed to denoise a tile. In case of tiling use withOverlapScratchSizeInBytes.
+/// If only full resolution images are denoised, withoutOverlapScratchSizeInBytes can be used which is always
+/// smaller than withOverlapScratchSizeInBytes.
+///
+/// 'outputWidth' and 'outputHeight' is the dimension of the image to be denoised (without overlap in case tiling
+/// is being used).
+/// 'outputWidth' and 'outputHeight' must be greater than or equal to the dimensions passed to optixDenoiserSetup.
+///
 /// \param[in] denoiser
 /// \param[in] outputWidth
 /// \param[in] outputHeight
@@ -607,26 +625,41 @@ OptixResult optixDenoiserComputeMemoryResources( const OptixDenoiser denoiser,
 
 /// Initializes the state required by the denoiser.
 ///
+/// 'inputWidth' and 'inputHeight' must include overlap on both sides of the image if tiling is being used. The overlap is
+/// returned by #optixDenoiserComputeMemoryResources.
+/// For subsequent calls to #optixDenoiserInvoke 'inputWidth' and 'inputHeight' are the maximum dimensions
+/// of the input layers. Dimensions of the input layers passed to #optixDenoiserInvoke may be different in each
+/// invocation however they always must be smaller than 'inputWidth' and 'inputHeight' passed to #optixDenoiserSetup.
+///
 /// \param[in] denoiser
 /// \param[in] stream
-/// \param[in] outputWidth
-/// \param[in] outputHeight
+/// \param[in] inputWidth
+/// \param[in] inputHeight
 /// \param[in] denoiserState
 /// \param[in] denoiserStateSizeInBytes
 /// \param[in] scratch
 /// \param[in] scratchSizeInBytes
 OptixResult optixDenoiserSetup( OptixDenoiser denoiser,
                                 CUstream      stream,
-                                unsigned int  outputWidth,
-                                unsigned int  outputHeight,
+                                unsigned int  inputWidth,
+                                unsigned int  inputHeight,
                                 CUdeviceptr   denoiserState,
                                 size_t        denoiserStateSizeInBytes,
                                 CUdeviceptr   scratch,
                                 size_t        scratchSizeInBytes );
 
 /// Invokes denoiser on a set of input data and produces one output
-/// image. Scratch memory must be available during the execution of the
-/// denoiser.
+/// image. State memory must be available during the execution of the
+/// denoiser (or until optixDenoiserSetup is called with a new state memory pointer).
+/// Scratch memory passed is used only for the duration of this function.
+/// Scratch and state memory sizes must have a size greater than or equal to the sizes as returned by
+/// optixDenoiserComputeMemoryResources.
+///
+/// 'inputOffsetX' and 'inputOffsetY' are pixel offsets in the 'inputLayers' image
+/// specifying the beginning of the image without overlap. When denoising an entire image without tiling
+/// there is no overlap and 'inputOffsetX' and 'inputOffsetY' must be zero. When denoising a tile which is
+/// adjacent to one of the four sides of the entire image the corresponding offsets must also be zero since
+/// there is no overlap at the side adjacent to the image border.
 ///
 /// \param[in] denoiser
 /// \param[in] stream
@@ -653,6 +686,23 @@ OptixResult optixDenoiserInvoke( OptixDenoiser              denoiser,
                                  CUdeviceptr                scratch,
                                  size_t                     scratchSizeInBytes );
 
+/// Computes the logarithmic average intensity of the given image. The returned value 'outputIntensity'
+/// is multiplied with the RGB values of the input image/tile in optixDenoiserInvoke if given in the parameter
+/// OptixDenoiserParams::hdrIntensity (otherwise 'hdrIntensity' must be a null pointer). This is useful for
+/// denoising HDR images which are very dark or bright.
+/// When denoising tiles the intensity of the entire image should be computed, i.e. not per tile to get
+/// consistent results.
+///
+/// For each RGB pixel in the inputImage the intensity is calculated and summed if it is greater than 1e-8f:
+/// intensity = log(r * 0.212586f + g * 0.715170f + b * 0.072200f).
+/// The function returns 0.18 / exp(sum of intensities / number of summed pixels).
+/// More details could be found in the Reinhard tonemapping paper:
+/// http://www.cmap.polytechnique.fr/~peyre/cours/x2005signal/hdr_photographic.pdf
+///
+/// This function needs scratch memory with a size of at least
+/// sizeof( int ) * ( 2 + inputImage::width * inputImage::height ). When denoising entire images (no tiling)
+/// the same scratch memory as passed to optixDenoiserInvoke could be used.
+///
 /// \param[in] denoiser
 /// \param[in] stream
 /// \param[in] inputImage

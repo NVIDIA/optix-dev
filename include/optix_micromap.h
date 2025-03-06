@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,11 +53,11 @@
 /// \param[out] baseBarycentrics0      Barycentric coordinates in the space of the base triangle of vertex 0 of the micromap triangle.
 /// \param[out] baseBarycentrics1      Barycentric coordinates in the space of the base triangle of vertex 1 of the micromap triangle.
 /// \param[out] baseBarycentrics2      Barycentric coordinates in the space of the base triangle of vertex 2 of the micromap triangle.
-OPTIX_MICROMAP_INLINE_FUNC void optixMicromapIndexToBaseBarycentrics( uint32_t micromapTriangleIndex,
-                                                                      uint32_t subdivisionLevel,
-                                                                      float2&  baseBarycentrics0,
-                                                                      float2&  baseBarycentrics1,
-                                                                      float2&  baseBarycentrics2 )
+OPTIX_MICROMAP_INLINE_FUNC void optixMicromapIndexToBaseBarycentrics( unsigned int micromapTriangleIndex,
+                                                                      unsigned int subdivisionLevel,
+                                                                      float2&      baseBarycentrics0,
+                                                                      float2&      baseBarycentrics1,
+                                                                      float2&      baseBarycentrics2 )
 {
     optix_impl::micro2bary( micromapTriangleIndex, subdivisionLevel, baseBarycentrics0, baseBarycentrics1, baseBarycentrics2 );
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
  *
  * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
  * rights in and to this software, related documentation and any modifications thereto.
@@ -26,7 +26,7 @@
 #define OPTIX_OPTIX_FUNCTION_TABLE_H
 
 /// The OptiX ABI version.
-#define OPTIX_ABI_VERSION 84
+#define OPTIX_ABI_VERSION 87
 
 #ifndef OPTIX_DEFINE_ABI_VERSION_ONLY
 

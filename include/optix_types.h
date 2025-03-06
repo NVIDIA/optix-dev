@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2021 NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
  *
  * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
  * rights in and to this software, related documentation and any modifications thereto.
@@ -225,9 +225,14 @@ typedef enum OptixDeviceProperty
     OPTIX_DEVICE_PROPERTY_LIMIT_MAX_SBT_RECORDS_PER_GAS = 0x2008,
 
     /// The maximum summed value of #OptixInstance::sbtOffset.
-    /// Also the maximum summed value of sbt offsets of all ancestor 
-    /// instances of a GAS in a traversable graph.
+    /// Also the maximum summed value of sbt offsets of all ancestor
+    /// instances of a GAS in a traversable graph. sizeof( unsigned int )
     OPTIX_DEVICE_PROPERTY_LIMIT_MAX_SBT_OFFSET = 0x2009,
+
+    /// Returns a flag specifying capabilities of the optixReorder() device function.  See
+    /// OptixDevicePropertyShaderExecutionReorderingFlags for documentation on the values
+    /// that can be returned. sizeof( unsigned int )
+    OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING = 0x200A,
 } OptixDeviceProperty;
 
 /// Type of the callback function used for log messages.
@@ -284,8 +289,21 @@ typedef struct OptixDeviceContextOptions
     OptixDeviceContextValidationMode validationMode;
 } OptixDeviceContextOptions;
 
+/// Flags used to interpret the result of #optixDeviceContextGetProperty() and
+/// OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING
+///
+/// \see #optixDeviceContextGetProperty()
+typedef enum OptixDevicePropertyShaderExecutionReorderingFlags
+{
+    /// optixReorder() acts as a no-op, and no thread reordering is performed. Note that
+    /// it is still legal to call this device function; no errors will be generated.
+    OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING_FLAG_NONE     = 0,
+
+    // Standard thread reordering is supported
+    OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING_FLAG_STANDARD = 1 << 0,
+} OptixDevicePropertyShaderExecutionReorderingFlags;
+
 /// Flags used by #OptixBuildInputTriangleArray::flags
-/// and #OptixBuildInput::flag
 /// and #OptixBuildInputCustomPrimitiveArray::flags
 typedef enum OptixGeometryFlags
 {
@@ -380,7 +398,7 @@ typedef enum OptixOpacityMicromapArrayIndexingMode
 {
     /// No opacity micromap is used
     OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_NONE = 0,
-    /// An implicit linear mapping of triangles to opacity micromaps in the 
+    /// An implicit linear mapping of triangles to opacity micromaps in the
     /// opacity micromap array is used. triangle[i] will use opacityMicromapArray[i].
     OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_LINEAR = 1,
     /// OptixBuildInputOpacityMicromap::indexBuffer provides a per triangle array of predefined indices
@@ -410,7 +428,7 @@ typedef struct OptixBuildInputOpacityMicromap
     OptixOpacityMicromapArrayIndexingMode indexingMode;
 
     /// Device pointer to a opacity micromap array used by this build input array.
-    /// This buffer is required when #OptixBuildInputOpacityMicromap::indexingMode is 
+    /// This buffer is required when #OptixBuildInputOpacityMicromap::indexingMode is
     /// OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_LINEAR or OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_INDEXED.
     /// Must be zero if #OptixBuildInputOpacityMicromap::indexingMode is OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_NONE.
     CUdeviceptr  opacityMicromapArray;
@@ -418,11 +436,11 @@ typedef struct OptixBuildInputOpacityMicromap
     /// int16 or int32 buffer specifying which opacity micromap index to use for each triangle.
     /// Instead of an actual index, one of the predefined indices
     /// OPTIX_OPACITY_MICROMAP_PREDEFINED_INDEX_(FULLY_TRANSPARENT | FULLY_OPAQUE | FULLY_UNKNOWN_TRANSPARENT | FULLY_UNKNOWN_OPAQUE)
-    /// can be used to indicate that there is no opacity micromap for this particular triangle 
-    /// but the triangle is in a uniform state and the selected behavior is applied 
+    /// can be used to indicate that there is no opacity micromap for this particular triangle
+    /// but the triangle is in a uniform state and the selected behavior is applied
     /// to the entire triangle.
     /// This buffer is required when #OptixBuildInputOpacityMicromap::indexingMode is OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_INDEXED.
-    /// Must be zero if #OptixBuildInputOpacityMicromap::indexingMode is 
+    /// Must be zero if #OptixBuildInputOpacityMicromap::indexingMode is
     /// OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_LINEAR or OPTIX_OPACITY_MICROMAP_ARRAY_INDEXING_MODE_NONE.
     CUdeviceptr  indexBuffer;
 
@@ -447,7 +465,7 @@ typedef struct OptixBuildInputOpacityMicromap
 typedef struct OptixRelocateInputOpacityMicromap
 {
     /// Device pointer to a relocated opacity micromap array used by the source build input array.
-    /// May be zero when no micromaps where used in the source accel, or the referenced opacity 
+    /// May be zero when no micromaps where used in the source accel, or the referenced opacity
     /// micromaps don't require relocation (for example relocation of a GAS on the source device).
     CUdeviceptr  opacityMicromapArray;
 } OptixRelocateInputOpacityMicromap;
@@ -848,8 +866,8 @@ typedef struct OptixBuildInputSphereArray
 {
   /// Pointer to host array of device pointers, one per motion step. Host array size must match number of
   /// motion keys as set in #OptixMotionOptions (or an array of size 1 if OptixMotionOptions::numKeys is set
-  /// to 1). Each per-motion-key device pointer must point to an array of floats (the center points of 
-  /// the spheres). 
+  /// to 1). Each per-motion-key device pointer must point to an array of floats (the center points of
+  /// the spheres).
   const CUdeviceptr* vertexBuffers;
 
   /// Stride between vertices. If set to zero, vertices are assumed to be tightly
@@ -977,11 +995,11 @@ typedef struct OptixRelocateInputInstanceArray
     /// Number of elements in #OptixRelocateInputInstanceArray::traversableHandles.
     /// Must match #OptixBuildInputInstanceArray::numInstances of the source build input.
     unsigned int numInstances;
-    
+
     /// These are the traversable handles of the instances (See OptixInstance::traversableHandle)
     /// These can be used when also relocating the instances.  No updates to
     /// the bounds are performed.  Use optixAccelBuild to update the bounds.
-    /// 'traversableHandles' may be zero when the traversables are not relocated 
+    /// 'traversableHandles' may be zero when the traversables are not relocated
     /// (i.e. relocation of an IAS on the source device).
     CUdeviceptr traversableHandles;
 
@@ -1613,6 +1631,18 @@ typedef enum OptixDenoiserModelKind
     OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X = 0x2328
 } OptixDenoiserModelKind;
 
+/// Alpha denoising mode
+///
+/// \see #optixDenoiserCreate()
+typedef enum OptixDenoiserAlphaMode
+{
+    /// Copy alpha (if present) from input layer, no denoising.
+    OPTIX_DENOISER_ALPHA_MODE_COPY = 0,
+
+    /// Denoise alpha.
+    OPTIX_DENOISER_ALPHA_MODE_DENOISE = 1
+} OptixDenoiserAlphaMode;
+
 /// Options used by the denoiser
 ///
 /// \see #optixDenoiserCreate()
@@ -1623,6 +1653,9 @@ typedef struct OptixDenoiserOptions
 
     // if nonzero, normal image must be given in OptixDenoiserGuideLayer
     unsigned int guideNormal;
+
+    /// alpha denoise mode
+    OptixDenoiserAlphaMode denoiseAlpha;
 } OptixDenoiserOptions;
 
 /// Guide layer for the denoiser
@@ -1630,21 +1663,23 @@ typedef struct OptixDenoiserOptions
 /// \see #optixDenoiserInvoke()
 typedef struct OptixDenoiserGuideLayer
 {
-    // albedo/bsdf image
+    // image with three components: R, G, B.
     OptixImage2D  albedo;
 
-    // normal vector image (2d or 3d pixel format)
+    // image with two or three components: X, Y, Z.
+    // (X, Y) camera space. (X, Y, Z) world space, depending on model.
     OptixImage2D  normal;
 
-    // 2d flow image, pixel flow from previous to current frame for each pixel
+    // image with two components: X, Y.
+    // pixel movement from previous to current frame for each pixel in screen space.
     OptixImage2D  flow;
 
     // Internal images used in temporal AOV denoising modes,
-    // pixel format OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER
+    // pixel format OPTIX_PIXEL_FORMAT_INTERNAL_GUIDE_LAYER.
     OptixImage2D  previousOutputInternalGuideLayer;
     OptixImage2D  outputInternalGuideLayer;
 
-    // 1d image specifying how trustworthy the flow vector at x,y position in
+    // image with a single component value that specifies how trustworthy the flow vector at x,y position in
     // OptixDenoiserGuideLayer::flow is. Range 0..1 (low->high trustworthiness).
     // Ignored if data pointer in the image is zero.
     OptixImage2D flowTrustworthiness;
@@ -1689,26 +1724,13 @@ typedef struct OptixDenoiserLayer
 /// \see #optixDenoiserInvoke()
 /// \see #optixDenoiserComputeIntensity()
 /// \see #optixDenoiserComputeAverageColor()
-typedef enum OptixDenoiserAlphaMode
-{
-    /// Copy alpha (if present) from input layer, no denoising.
-    OPTIX_DENOISER_ALPHA_MODE_COPY = 0,
 
-    /// Denoise alpha separately. With AOV model kinds, treat alpha like an AOV.
-    OPTIX_DENOISER_ALPHA_MODE_ALPHA_AS_AOV = 1,
-
-    /// With AOV model kinds, full denoise pass with alpha.
-    /// This is slower than OPTIX_DENOISER_ALPHA_MODE_ALPHA_AS_AOV.
-    OPTIX_DENOISER_ALPHA_MODE_FULL_DENOISE_PASS = 2
-} OptixDenoiserAlphaMode;
 typedef struct OptixDenoiserParams
 {
-    /// alpha denoise mode
-    OptixDenoiserAlphaMode denoiseAlpha;
-
     /// average log intensity of input image (default null pointer). points to a single float.
-    /// with the default (null pointer) denoised results will not be optimal for very dark or
-    /// bright input images.
+    /// if set to null, autoexposure will be calculated automatically for the input image.
+    /// Should be set to average log intensity of the entire image at least if tiling is used to
+    /// get consistent autoexposure for all tiles.
     CUdeviceptr  hdrIntensity;
 
     /// blend factor.
@@ -1719,8 +1741,9 @@ typedef struct OptixDenoiserParams
 
     /// this parameter is used when the OPTIX_DENOISER_MODEL_KIND_AOV model kind is set.
     /// average log color of input image, separate for RGB channels (default null pointer).
-    /// points to three floats. with the default (null pointer) denoised results will not be
-    /// optimal.
+    /// points to three floats.
+    /// if set to null, average log color will be calculated automatically. See hdrIntensity for tiling,
+    /// this also applies here.
     CUdeviceptr  hdrAverageColor;
 
     /// In temporal modes this parameter must be set to 1 if previous layers (e.g.
@@ -2041,7 +2064,7 @@ typedef struct OptixModuleCompileOptions
     unsigned int numPayloadTypes;
 
     /// Points to host array of payload type definitions, size must match numPayloadTypes
-    OptixPayloadType *payloadTypes;
+    const OptixPayloadType* payloadTypes;
 
 } OptixModuleCompileOptions;
 
@@ -2169,7 +2192,7 @@ typedef struct OptixProgramGroupOptions
     /// for which all programs in the group are available.
     /// If the payload type could not be deduced uniquely
     /// optixProgramGroupCreate returns OPTIX_ERROR_PAYLOAD_TYPE_RESOLUTION_FAILED.
-    OptixPayloadType* payloadType;
+    const OptixPayloadType* payloadType;
 } OptixProgramGroupOptions;
 
 /// The following values are used to indicate which exception was thrown.
@@ -2183,96 +2206,7 @@ typedef enum OptixExceptionCodes
     /// no exception details.
     OPTIX_EXCEPTION_CODE_TRACE_DEPTH_EXCEEDED = -2,
 
-    /// The traversal depth is exceeded.
-    /// Exception details:
-    ///     optixGetTransformListSize()
-    ///     optixGetTransformListHandle()
-    OPTIX_EXCEPTION_CODE_TRAVERSAL_DEPTH_EXCEEDED = -3,
 
-    /// Traversal encountered an invalid traversable type.
-    /// Exception details:
-    ///     optixGetTransformListSize()
-    ///     optixGetTransformListHandle()
-    ///     optixGetExceptionInvalidTraversable()
-    OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_TRAVERSABLE = -5,
-
-    /// The miss SBT record index is out of bounds
-    /// A miss SBT record index is valid within the range [0, OptixShaderBindingTable::missRecordCount) (See optixLaunch)
-    /// Exception details:
-    ///     optixGetExceptionInvalidSbtOffset()
-    OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_MISS_SBT = -6,
-
-    /// The traversal hit SBT record index out of bounds.
-    ///
-    /// A traversal hit SBT record index is valid within the range [0, OptixShaderBindingTable::hitgroupRecordCount) (See optixLaunch)
-    /// The following formula relates the
-    //      sbt-index (See optixGetExceptionInvalidSbtOffset),
-    //      sbt-instance-offset (See OptixInstance::sbtOffset),
-    ///     sbt-geometry-acceleration-structure-index (See optixGetSbtGASIndex),
-    ///     sbt-stride-from-trace-call and sbt-offset-from-trace-call (See optixTrace)
-    ///
-    /// sbt-index = sbt-instance-offset + (sbt-geometry-acceleration-structure-index * sbt-stride-from-trace-call) + sbt-offset-from-trace-call
-    ///
-    /// Exception details:
-    ///     optixGetTransformListSize()
-    ///     optixGetTransformListHandle()
-    ///     optixGetExceptionInvalidSbtOffset()
-    ///     optixGetSbtGASIndex()
-    OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_HIT_SBT = -7,
-
-    /// The shader encountered an unsupported primitive type (See OptixPipelineCompileOptions::usesPrimitiveTypeFlags).
-    /// no exception details.
-    OPTIX_EXCEPTION_CODE_UNSUPPORTED_PRIMITIVE_TYPE = -8,
-
-    /// The shader encountered a call to optixTrace with at least
-    /// one of the float arguments being inf or nan, or the tmin argument is negative.
-    /// Exception details:
-    ///     optixGetExceptionInvalidRay()
-    OPTIX_EXCEPTION_CODE_INVALID_RAY = -9,
-
-    /// The shader encountered a call to either optixDirectCall or optixCallableCall
-    /// where the argument count does not match the parameter count of the callable
-    /// program which is called.
-    /// Exception details:
-    ///     optixGetExceptionParameterMismatch
-    OPTIX_EXCEPTION_CODE_CALLABLE_PARAMETER_MISMATCH = -10,
-
-    /// The invoked builtin IS does not match the current GAS
-    OPTIX_EXCEPTION_CODE_BUILTIN_IS_MISMATCH = -11,
-
-    /// Tried to call a callable program using an SBT offset that is larger
-    /// than the number of passed in callable SBT records.
-    /// Exception details:
-    ///     optixGetExceptionInvalidSbtOffset()
-    OPTIX_EXCEPTION_CODE_CALLABLE_INVALID_SBT = -12,
-
-    /// Tried to call a direct callable using an SBT offset of a record that
-    /// was built from a program group that did not include a direct callable.
-    OPTIX_EXCEPTION_CODE_CALLABLE_NO_DC_SBT_RECORD = -13,
-
-    /// Tried to call a continuation callable using an SBT offset of a record
-    /// that was built from a program group that did not include a continuation callable.
-    OPTIX_EXCEPTION_CODE_CALLABLE_NO_CC_SBT_RECORD = -14,
-
-    /// Tried to directly traverse a single gas while single gas traversable graphs are not enabled
-    ///   (see OptixTraversableGraphFlags::OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS).
-    /// Exception details:
-    ///     optixGetTransformListSize()
-    ///     optixGetTransformListHandle()
-    ///     optixGetExceptionInvalidTraversable()
-    OPTIX_EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS = -15,
-
-    /// argument passed to an optix call is
-    /// not within an acceptable range of values.
-    OPTIX_EXCEPTION_CODE_INVALID_VALUE_ARGUMENT_0 = -16,
-    OPTIX_EXCEPTION_CODE_INVALID_VALUE_ARGUMENT_1 = -17,
-    OPTIX_EXCEPTION_CODE_INVALID_VALUE_ARGUMENT_2 = -18,
-
-    /// Tried to access data on an AS without random data access support (See OptixBuildFlags).
-    OPTIX_EXCEPTION_CODE_UNSUPPORTED_DATA_ACCESS = -32,
-
-    /// The program payload type doesn't match the trace payload type.
-    OPTIX_EXCEPTION_CODE_PAYLOAD_TYPE_MISMATCH = -33,
 } OptixExceptionCodes;
 
 /// Exception flags.
@@ -2284,17 +2218,25 @@ typedef enum OptixExceptionFlags
     OPTIX_EXCEPTION_FLAG_NONE = 0,
 
     /// Enables exceptions check related to the continuation stack.
+    /// This flag should be used when the application handles stack overflows
+    /// in a user exception program as part of the normal flow of execution.
+    /// For catching overflows during debugging and development, the
+    /// device context validation mode should be used instead.
+    /// \see OptixDeviceContextValidationMode
     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW = 1u << 0,
 
     /// Enables exceptions check related to trace depth.
+    /// This flag should be used when the application handles trace depth overflows
+    /// in a user exception program as part of the normal flow of execution.
+    /// For catching overflows during debugging and development, the
+    /// device context validation mode should be used instead.
+    /// \see OptixDeviceContextValidationMode
     OPTIX_EXCEPTION_FLAG_TRACE_DEPTH = 1u << 1,
 
     /// Enables user exceptions via optixThrowException(). This flag must be specified for all modules in a pipeline
     /// if any module calls optixThrowException().
     OPTIX_EXCEPTION_FLAG_USER = 1u << 2,
 
-    /// Enables various exceptions check related to traversal.
-    OPTIX_EXCEPTION_FLAG_DEBUG = 1u << 3
 } OptixExceptionFlags;
 
 /// Compilation options for all modules of a pipeline.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
  *
  * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
  * rights in and to this software, related documentation and any modifications thereto.
@@ -273,7 +273,7 @@ OptixResult optixPipelineDestroy( OptixPipeline pipeline );
 /// to understand how to construct the stack sizes based on their particular needs.
 ///
 /// If this method is not used, an internal default implementation is used. The default implementation is correct (but
-/// not necessarily optimal) as long as the maximum depth of call trees of CC and DC programs is at most 2 and no motion transforms are used.
+/// not necessarily optimal) as long as the maximum depth of call trees of CC programs is at most 2, and no DC programs or motion transforms are used.
 ///
 /// The maxTraversableGraphDepth responds to the maximal number of traversables visited when calling trace.
 /// Every acceleration structure and motion transform count as one level of traversal.
@@ -433,7 +433,7 @@ OptixResult optixBuiltinISModuleGet( OptixDeviceContext                 context,
 /// \param[in] task the OptixTask to execute
 /// \param[in] additionalTasks pointer to array of OptixTask objects to be filled in
 /// \param[in] maxNumAdditionalTasks maximum number of additional OptixTask objects
-/// \param[out] numAdditionalTasksCreated number of OptixTask objects created by OptiX and written into #additionalTasks
+/// \param[out] numAdditionalTasksCreated number of OptixTask objects created by OptiX and written into additionalTasks
 OptixResult optixTaskExecute( OptixTask task, OptixTask* additionalTasks, unsigned int maxNumAdditionalTasks, unsigned int* numAdditionalTasksCreated );
 
 //@}
@@ -728,8 +728,6 @@ OptixResult optixOpacityMicromapArrayComputeMemoryUsage( OptixDeviceContext     
 /// \param[in] stream
 /// \param[in] buildInput             a single build input object referencing many opacity micromaps
 /// \param[in] buffers                the buffers used for build
-/// \param[in/out] emittedProperties  types of requested properties and output buffers
-/// \param[in] numEmittedProperties   number of post-build properties to populate (may be zero)
 OptixResult optixOpacityMicromapArrayBuild( OptixDeviceContext                         context,
                                             CUstream                                   stream,
                                             const OptixOpacityMicromapArrayBuildInput* buildInput,

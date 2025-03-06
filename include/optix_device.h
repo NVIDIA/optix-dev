@@ -1,23 +1,14 @@
 /*
-* Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
+* SPDX-FileCopyrightText: Copyright (c) 2010 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* SPDX-License-Identifier: LicenseRef-NvidiaProprietary
 *
-* NVIDIA Corporation and its licensors retain all intellectual property and proprietary
-* rights in and to this software, related documentation and any modifications thereto.
-* Any use, reproduction, disclosure or distribution of this software and related
-* documentation without an express license agreement from NVIDIA Corporation is strictly
-* prohibited.
-*
-* TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THIS SOFTWARE IS PROVIDED *AS IS*
-* AND NVIDIA AND ITS SUPPLIERS DISCLAIM ALL WARRANTIES, EITHER EXPRESS OR IMPLIED,
-* INCLUDING, BUT NOT LIMITED TO, IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
-* PARTICULAR PURPOSE.  IN NO EVENT SHALL NVIDIA OR ITS SUPPLIERS BE LIABLE FOR ANY
-* SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL DAMAGES WHATSOEVER (INCLUDING, WITHOUT
-* LIMITATION, DAMAGES FOR LOSS OF BUSINESS PROFITS, BUSINESS INTERRUPTION, LOSS OF
-* BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS) ARISING OUT OF THE USE OF OR
-* INABILITY TO USE THIS SOFTWARE, EVEN IF NVIDIA HAS BEEN ADVISED OF THE POSSIBILITY OF
-* SUCH DAMAGES
+* NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+* property and proprietary rights in and to this material, related
+* documentation and any modifications thereto. Any use, reproduction,
+* disclosure or distribution of this material and related documentation
+* without an express license agreement from NVIDIA CORPORATION or
+* its affiliates is strictly prohibited.
 */
-
 /// @file
 /// @author NVIDIA Corporation
 /// @brief  OptiX public API header
@@ -56,7 +47,7 @@
 /// \param[in] missSBTIndex   specifies the miss program invoked on a miss
 /// \param[in,out] payload    up to 32 unsigned int values that hold the payload
 ///
-/// Available in RG, CH, MS, CC, DC
+/// Available in RG, CH, MS, CC
 template <typename... Payload>
 static __forceinline__ __device__ void optixTrace( OptixTraversableHandle handle,
                                                    float3                 rayOrigin,
@@ -120,7 +111,7 @@ static __forceinline__ __device__ void optixTraverse( OptixTraversableHandle han
 /// \param[in] missSBTIndex   specifies the miss program invoked on a miss
 /// \param[in,out] payload    up to 32 unsigned int values that hold the payload
 ///
-/// Available in RG, CH, MS, CC, DC
+/// Available in RG, CH, MS, CC
 template <typename... Payload>
 static __forceinline__ __device__ void optixTrace( OptixPayloadTypeID     type,
                                                    OptixTraversableHandle handle,
@@ -785,7 +776,7 @@ static __forceinline__ __device__ float3 optixTransformNormalFromObjectToWorldSp
 
 /// Returns the number of transforms on the current transform list.
 ///
-/// Available in IS, AH, CH, EX
+/// Available in IS, AH, CH
 static __forceinline__ __device__ unsigned int optixGetTransformListSize();
 
 /// Returns the number of transforms associated with the current outgoing hit object's transform
@@ -800,7 +791,7 @@ static __forceinline__ __device__ unsigned int optixHitObjectGetTransformListSiz
 
 /// Returns the traversable handle for a transform in the current transform list.
 ///
-/// Available in IS, AH, CH, EX
+/// Available in IS, AH, CH
 static __forceinline__ __device__ OptixTraversableHandle optixGetTransformListHandle( unsigned int index );
 
 /// Returns the traversable handle for a transform in the current transform list associated with the
@@ -867,6 +858,12 @@ static __forceinline__ __device__ const float4* optixGetInstanceTransformFromHan
 /// Available in all OptiX program types
 static __forceinline__ __device__ const float4* optixGetInstanceInverseTransformFromHandle( OptixTraversableHandle handle );
 
+/// Returns a pointer to the geometry acceleration structure from its traversable handle.
+///
+/// Returns 0 if the traversable is not a geometry acceleration structure.
+///
+/// Available in all OptiX program types
+static __device__ __forceinline__ CUdeviceptr optixGetGASPointerFromHandle( OptixTraversableHandle handle );
 /// Reports an intersections (overload without attributes).
 ///
 /// If optixGetRayTmin() <= hitT <= optixGetRayTmax(), the any hit program associated with this
@@ -1039,7 +1036,7 @@ static __forceinline__ __device__ void optixIgnoreIntersection();
 ///
 /// In CH this corresponds to the primitive index of the closest intersected primitive.
 ///
-/// Available in IS, AH, CH, EX
+/// Available in IS, AH, CH
 static __forceinline__ __device__ unsigned int optixGetPrimitiveIndex();
 
 /// Return the primitive index associated with the current outgoing hit object.
@@ -1057,10 +1054,7 @@ static __forceinline__ __device__ unsigned int optixHitObjectGetPrimitiveIndex()
 ///
 /// In CH this corresponds to the SBT GAS index of the closest intersected primitive.
 ///
-/// In EX with exception code OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_HIT_SBT corresponds to the sbt
-/// index within the hit GAS. Returns zero for all other exceptions.
-///
-/// Available in IS, AH, CH, EX
+/// Available in IS, AH, CH
 static __forceinline__ __device__ unsigned int optixGetSbtGASIndex();
 
 /// Return the SBT GAS index of the closest intersected primitive associated with the current
@@ -1235,7 +1229,10 @@ static __forceinline__ __device__ uint3 optixGetLaunchDimensions();
 /// Returns the generic memory space pointer to the data region (past the header) of the
 /// currently active SBT record corresponding to the current program.
 ///
-/// Available in RG, IS, AH, CH, MS, EX, DC( excluding optix enabled functions), CC
+/// Note that optixGetSbtDataPointer is not available in OptiX-enabled functions, because
+/// there is no SBT entry associated with the function.
+///
+/// Available in RG, IS, AH, CH, MS, EX, DC, CC
 static __forceinline__ __device__ CUdeviceptr optixGetSbtDataPointer();
 
 /// Device pointer address for the SBT associated with the hit or miss program for the current
@@ -1420,10 +1417,8 @@ static __forceinline__ __device__ unsigned int optixGetExceptionDetail_7();
 /// Returns a string that includes information about the source location that caused the current
 /// exception.
 ///
-/// The source location is only available for exceptions of type
-/// OPTIX_EXCEPTION_CODE_CALLABLE_PARAMETER_MISMATCH,
-/// OPTIX_EXCEPTION_CODE_UNSUPPORTED_PRIMITIVE_TYPE, OPTIX_EXCEPTION_CODE_INVALID_RAY, and for user
-/// exceptions.  Line information needs to be present in the input PTX and
+/// The source location is only available for user exceptions.
+/// Line information needs to be present in the input PTX and
 /// OptixModuleCompileOptions::debugLevel may not be set to OPTIX_COMPILE_DEBUG_LEVEL_NONE.
 ///
 /// Returns a NULL pointer if no line information is available.

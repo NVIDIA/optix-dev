@@ -1,24 +1,15 @@
 
-/*
- * Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
- *
- * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
- * rights in and to this software, related documentation and any modifications thereto.
- * Any use, reproduction, disclosure or distribution of this software and related
- * documentation without an express license agreement from NVIDIA Corporation is strictly
- * prohibited.
- *
- * TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THIS SOFTWARE IS PROVIDED *AS IS*
- * AND NVIDIA AND ITS SUPPLIERS DISCLAIM ALL WARRANTIES, EITHER EXPRESS OR IMPLIED,
- * INCLUDING, BUT NOT LIMITED TO, IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- * PARTICULAR PURPOSE.  IN NO EVENT SHALL NVIDIA OR ITS SUPPLIERS BE LIABLE FOR ANY
- * SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL DAMAGES WHATSOEVER (INCLUDING, WITHOUT
- * LIMITATION, DAMAGES FOR LOSS OF BUSINESS PROFITS, BUSINESS INTERRUPTION, LOSS OF
- * BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS) ARISING OUT OF THE USE OF OR
- * INABILITY TO USE THIS SOFTWARE, EVEN IF NVIDIA HAS BEEN ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGES
- */
-
+/* 
+* SPDX-FileCopyrightText: Copyright (c) 2019 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved. 
+* SPDX-License-Identifier: LicenseRef-NvidiaProprietary 
+* 
+* NVIDIA CORPORATION, its affiliates and licensors retain all intellectual 
+* property and proprietary rights in and to this material, related 
+* documentation and any modifications thereto. Any use, reproduction, 
+* disclosure or distribution of this material and related documentation 
+* without an express license agreement from NVIDIA CORPORATION or 
+* its affiliates is strictly prohibited. 
+*/
 /// @file
 /// @author NVIDIA Corporation
 /// @brief  OptiX public API header
@@ -303,7 +294,8 @@ typedef enum OptixDevicePropertyShaderExecutionReorderingFlags
     OPTIX_DEVICE_PROPERTY_SHADER_EXECUTION_REORDERING_FLAG_STANDARD = 1 << 0,
 } OptixDevicePropertyShaderExecutionReorderingFlags;
 
-/// Flags used by #OptixBuildInputTriangleArray::flags
+/// Flags used by #OptixBuildInputTriangleArray::flags,
+/// #OptixBuildInputSphereArray::flags
 /// and #OptixBuildInputCustomPrimitiveArray::flags
 typedef enum OptixGeometryFlags
 {
@@ -343,6 +335,8 @@ typedef enum OptixIndicesFormat
 {
     /// No indices, this format must only be used in combination with triangle soups, i.e., numIndexTriplets must be zero
     OPTIX_INDICES_FORMAT_NONE = 0,
+    /// Three bytes
+    OPTIX_INDICES_FORMAT_UNSIGNED_BYTE3 = 0x2101,
     /// Three shorts
     OPTIX_INDICES_FORMAT_UNSIGNED_SHORT3 = 0x2102,
     /// Three ints
@@ -534,9 +528,9 @@ typedef struct OptixDisplacementMicromapArrayBuildInput
 {
     /// Flags that apply to all displacement micromaps in array.
     OptixDisplacementMicromapFlags                 flags;
-    /// 128 byte aligned pointer for displacement micromap raw input data.
+    /// 128 byte aligned pointer for displacement values input data (the displacement blocks).
     CUdeviceptr                                    displacementValuesBuffer;
-    /// Descriptors for interpreting raw input data, one OptixDisplacementMicromapDesc entry required per displacement micromap.
+    /// Descriptors for interpreting displacement values input data, one OptixDisplacementMicromapDesc entry required per displacement micromap.
     /// This device pointer must be a multiple of OPTIX_DISPLACEMENT_MICROMAP_DESC_BUFFER_BYTE_ALIGNMENT.
     CUdeviceptr                                    perDisplacementMicromapDescBuffer;
     /// Stride between OptixDisplacementMicromapDesc in perDisplacementMicromapDescBuffer
@@ -1667,7 +1661,8 @@ typedef struct OptixDenoiserGuideLayer
     OptixImage2D  albedo;
 
     // image with two or three components: X, Y, Z.
-    // (X, Y) camera space. (X, Y, Z) world space, depending on model.
+    // (X, Y) camera space for OPTIX_DENOISER_MODEL_KIND_LDR, OPTIX_DENOISER_MODEL_KIND_HDR models.
+    // (X, Y, Z) world space, all other models.
     OptixImage2D  normal;
 
     // image with two components: X, Y.
@@ -2380,38 +2375,6 @@ typedef struct OptixBuiltinISOptions
     unsigned int              curveEndcapFlags;
 } OptixBuiltinISOptions;
 
-#if defined( __CUDACC__ )
-/// Describes the ray that was passed into \c optixTrace() which caused an exception with
-/// exception code OPTIX_EXCEPTION_CODE_INVALID_RAY.
-///
-/// \see #optixGetExceptionInvalidRay()
-typedef struct OptixInvalidRayExceptionDetails
-{
-    float3 origin;
-    float3 direction;
-    float  tmin;
-    float  tmax;
-    float  time;
-} OptixInvalidRayExceptionDetails;
-
-/// Describes the details of a call to a callable program which caused an exception with
-/// exception code OPTIX_EXCEPTION_CODE_CALLABLE_PARAMETER_MISMATCH,
-/// Note that OptiX packs the parameters into individual 32 bit values, so the number of
-/// expected and passed values may not correspond to the number of arguments passed into
-/// optixDirectCall or optixContinuationCall, or the number parameters in the definition
-/// of the function that is called.
-typedef struct OptixParameterMismatchExceptionDetails
-{
-    /// Number of 32 bit values expected by the callable program
-    unsigned int expectedParameterCount;
-    /// Number of 32 bit values that were passed to the callable program
-    unsigned int passedArgumentCount;
-    /// The offset of the SBT entry of the callable program relative to OptixShaderBindingTable::callablesRecordBase
-    unsigned int sbtIndex;
-    /// Pointer to a string that holds the name of the callable program that was called
-    char*        callableName;
-} OptixParameterMismatchExceptionDetails;
-#endif
 
 
 /**@}*/  // end group optix_types

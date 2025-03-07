@@ -14,3 +14,6 @@ For an in-depth introduction to OptiX, to find OptiX documentation, or to
 download the complete OptiX SDK including code samples and supporting
 libraries, please see the OptiX homepage, located here:
 https://developer.nvidia.com/rtx/ray-tracing/optix
+
+For bug reports, comments, or questions, please visit the OptiX Forum:
+https://forums.developer.nvidia.com/c/gaming-and-visualization-technologies/visualization/optix/167

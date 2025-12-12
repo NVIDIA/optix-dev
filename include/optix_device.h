@@ -292,7 +292,7 @@ static __forceinline__ __device__ unsigned int optixHitObjectGetSbtRecordIndex()
 
 /// Sets the SBT record index in the current outgoing hit object.
 ///
-/// Available in RG, CH, MS, CC
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ void optixHitObjectSetSbtRecordIndex( unsigned int sbtRecordIndex );
 
 /// Returns the traversable handle for the Geometry Acceleration Structure (GAS) associated
@@ -392,6 +392,16 @@ static __forceinline__ __device__ void optixSetPayloadTypes( unsigned int typeMa
 ///
 /// Available anywhere
 static __forceinline__ __device__ unsigned int optixUndefinedValue();
+
+/// If non-zero it is legal to call optixTrace or optixTraverse without triggering an
+/// OPTIX_EXCEPTION_CODE_TRACE_DEPTH_EXCEEDED exception. In the case of optixTrace it
+/// represents the number of recursive calls that are remaining and counts down.
+///
+/// Value is in the range of [0..OptixPipelineLinkOptions::maxTraceDepth], and
+/// maxTraceDepth has a maximum value of 31.
+///
+/// Available in RG, CH, MS, CC, DC
+static __forceinline__ __device__ unsigned int optixGetRemainingTraceDepth();
 
 /// Returns the rayOrigin passed into optixTrace.
 ///
@@ -557,17 +567,6 @@ static __forceinline__ __device__ void optixGetTriangleVertexData( float3 data[3
 /// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ void optixHitObjectGetTriangleVertexData( float3 data[3] );
 
-/// Returns the object space micro triangle vertex positions of the current hit.  The current hit
-/// must be a displacement micromap triangle hit.
-///
-/// Available in AH, CH
-static __forceinline__ __device__ void optixGetMicroTriangleVertexData( float3 data[3] );
-
-/// Returns the barycentrics of the vertices of the currently intersected micro triangle with
-/// respect to the base triangle.
-///
-/// Available in AH, CH
-static __forceinline__ __device__ void optixGetMicroTriangleBarycentricsData( float2 data[3] );
 
 /// Deprecated. Call either optixGetLinearCurveVertexData( float4 data[2] ) for a current-hit data fetch,
 ///  or optixGetLinearCurveVertexDataFromHandle( ... ) for a random-access data fetch.
@@ -1146,7 +1145,7 @@ static __forceinline__ __device__ void optixHitObjectGetObjectToWorldTransformMa
 ///
 /// The cost of this function may be proportional to the size of the transformation list.
 ///
-/// Available in IS, AH, CH
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ float3 optixHitObjectTransformPointFromWorldToObjectSpace( float3 point );
 
 /// Transforms the vector using world-to-object transformation matrix resulting from the
@@ -1154,7 +1153,7 @@ static __forceinline__ __device__ float3 optixHitObjectTransformPointFromWorldTo
 ///
 /// The cost of this function may be proportional to the size of the transformation list.
 ///
-/// Available in IS, AH, CH
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ float3 optixHitObjectTransformVectorFromWorldToObjectSpace( float3 vec );
 
 /// Transforms the normal using world-to-object transformation matrix resulting from the
@@ -1162,7 +1161,7 @@ static __forceinline__ __device__ float3 optixHitObjectTransformVectorFromWorldT
 ///
 /// The cost of this function may be proportional to the size of the transformation list.
 ///
-/// Available in IS, AH, CH
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ float3 optixHitObjectTransformNormalFromWorldToObjectSpace( float3 normal );
 
 /// Transforms the point using object-to-world transformation matrix resulting from the
@@ -1170,7 +1169,7 @@ static __forceinline__ __device__ float3 optixHitObjectTransformNormalFromWorldT
 ///
 /// The cost of this function may be proportional to the size of the transformation list.
 ///
-/// Available in IS, AH, CH
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ float3 optixHitObjectTransformPointFromObjectToWorldSpace( float3 point );
 
 /// Transforms the vector using object-to-world transformation matrix resulting from the
@@ -1178,7 +1177,7 @@ static __forceinline__ __device__ float3 optixHitObjectTransformPointFromObjectT
 ///
 /// The cost of this function may be proportional to the size of the transformation list.
 ///
-/// Available in IS, AH, CH
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ float3 optixHitObjectTransformVectorFromObjectToWorldSpace( float3 vec );
 
 /// Transforms the normal using object-to-world transformation matrix resulting from the
@@ -1186,7 +1185,7 @@ static __forceinline__ __device__ float3 optixHitObjectTransformVectorFromObject
 ///
 /// The cost of this function may be proportional to the size of the transformation list.
 ///
-/// Available in IS, AH, CH
+/// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ float3 optixHitObjectTransformNormalFromObjectToWorldSpace( float3 normal );
 
 /// Returns the world-to-object transformation matrix resulting from the transformation list of the
@@ -1560,15 +1559,20 @@ static __forceinline__ __device__ unsigned int optixGetPrimitiveIndex();
 
 /// Returns the user-provided cluster ID of the intersected CLAS of a hit.
 ///
-/// Returns OPTIX_CLUSTER_ID_INVALID if a non-Cluster GAS was intersected.
+/// Returns OPTIX_CLUSTER_ID_INVALID if the closest (or current) intersection 
+/// is not a cluster.
+///
+/// see also OptixPipelineCompileOptions::allowClusteredGeometry
 ///
 /// Available in AH, CH
 static __forceinline__ __device__ unsigned int optixGetClusterId();
 
 /// Returns the user-provided cluster ID associated with the current outgoing hit object.
 ///
-/// Returns OPTIX_CLUSTER_ID_INVALID if a non-Cluster GAS was intersected or if
-/// the hit object is a miss.
+/// Returns OPTIX_CLUSTER_ID_INVALID if the closest intersection is not a cluster,
+/// or if the hit object is a miss.
+///
+/// see also OptixPipelineCompileOptions::allowClusteredGeometry
 ///
 /// Available in RG, CH, MS, CC, DC
 static __forceinline__ __device__ unsigned int optixHitObjectGetClusterId();
@@ -1711,20 +1715,6 @@ static __forceinline__ __device__ bool optixIsTriangleFrontFaceHit();
 /// Available in AH, CH
 static __forceinline__ __device__ bool optixIsTriangleBackFaceHit();
 
-/// Convenience function interpreting the result of #optixGetHitKind().
-///
-/// Available in AH, CH
-static __forceinline__ __device__ bool optixIsDisplacedMicromeshTriangleHit();
-
-/// Convenience function interpreting the result of #optixGetHitKind().
-///
-/// Available in AH, CH
-static __forceinline__ __device__ bool optixIsDisplacedMicromeshTriangleFrontFaceHit();
-
-/// Convenience function interpreting the result of #optixGetHitKind().
-///
-/// Available in AH, CH
-static __forceinline__ __device__ bool optixIsDisplacedMicromeshTriangleBackFaceHit();
 
 /// Convenience function that returns the first two attributes as floats.
 ///
@@ -2159,11 +2149,7 @@ static __forceinline__ __device__ uint4 optixTexFootprint2DGrad( unsigned long l
 // set it to 0 or 1 and not simply define it with no value (which will default it have a value of 0).
 #ifndef OPTIX_INCLUDE_COOPERATIVE_VECTOR
 #  define OPTIX_INCLUDE_COOPERATIVE_VECTOR_UNSET
-#  ifdef __CUDACC_RTC__ // NVRTC and cooperative vectors are currently unsupported
-#    define OPTIX_INCLUDE_COOPERATIVE_VECTOR 0
-#  else
-#    define OPTIX_INCLUDE_COOPERATIVE_VECTOR 1
-#  endif
+#  define OPTIX_INCLUDE_COOPERATIVE_VECTOR 1
 #endif
 
 #if OPTIX_INCLUDE_COOPERATIVE_VECTOR
@@ -2236,6 +2222,7 @@ static __forceinline__ __device__ VecT optixCoopVecAdd( const VecT& vecA, const 
 /// Available anywhere
 template <typename VecT>
 static __forceinline__ __device__ VecT optixCoopVecSub( const VecT& vecA, const VecT& vecB );
+/// Returns result[i] = ( vecA[i] < vecB[i] ) ? 0 : 1;
 ///
 /// Available anywhere
 template <typename VecT>
@@ -2245,7 +2232,7 @@ static __forceinline__ __device__ VecT optixCoopVecStep( const VecT& vecA, const
 template <typename VecT>
 static __forceinline__ __device__ VecT optixCoopVecFFMA( const VecT& vecA, const VecT& vecB, const VecT& vecC );
 
-/// Computes a vector matrix multiplication with an optional addition of a bias.
+/// Computes a vector matrix multiplication with an addition of a bias.
 ///
 /// \code
 ///           A * B           + C     = D
@@ -2283,8 +2270,9 @@ static __forceinline__ __device__ VecT optixCoopVecFFMA( const VecT& vecA, const
 /// OPTIX_COOP_VEC_MATRIX_LAYOUT_INFERENCING_OPTIMAL and
 /// OPTIX_COOP_VEC_MATRIX_LAYOUT_TRAINING_OPTIMAL are supported.
 ///
-/// The biasElementType must be specified and compatible even if the pointer supplied is
-/// NULL.
+/// The bias pointer is assumed to not be null and may be dereferenced. If you wish to do
+/// the matrix multiply without a bias then use the overloaded version of this function
+/// that does not take the bias.
 ///
 /// For row and column ordered matrix layouts, the stride will assume tight packing when
 /// rowColumnStrideInBytes is a constant immediate 0 (computed values or loaded from
@@ -2304,8 +2292,8 @@ static __forceinline__ __device__ VecT optixCoopVecFFMA( const VecT& vecA, const
 /// \param[in] inputVector
 /// \param[in] matrix                 pointer to global memory. Array of NxK elements. 64 byte aligned. Must not be modified during use.
 /// \param[in] matrixOffsetInBytes    offset to start of matrix data. Using the same value for matrix with different offsets for all layers yields more effecient execution. 64 byte aligned.
-/// \param[in] bias                   pointer to global memory. Array of N elements. 16 byte aligned. Must not be modified during use. May be NULL if unused.
-/// \param[in] biasOffsetInBytes      offset to start of bias data. Using the same value for bias with different offsets for all layers yields more effecient execution. 16 byte aligned. Ignored if bias is NULL.
+/// \param[in] bias                   pointer to global memory. Array of N elements. 16 byte aligned. Must not be modified during use.
+/// \param[in] biasOffsetInBytes      offset to start of bias data. Using the same value for bias with different offsets for all layers yields more effecient execution. 16 byte aligned.
 /// \param[in] rowColumnStrideInBytes for row or column major matrix layouts, this identifies the stride between columns or rows.
 ///
 /// Available in all OptiX program types
@@ -2325,6 +2313,13 @@ static __forceinline__ __device__ VecTOut optixCoopVecMatMul( const VecTIn& inpu
                                                               CUdeviceptr bias,  // 16 byte aligned, Array of N elements
                                                               unsigned    biasOffsetInBytes,  // 16 byte aligned
                                                               unsigned    rowColumnStrideInBytes = 0 );
+
+/// Same as #optixCoopVecMatMul, but without the bias parameters.
+template <typename VecTOut, typename VecTIn, OptixCoopVecElemType inputInterpretation, OptixCoopVecMatrixLayout matrixLayout, bool transpose, unsigned int N, unsigned int K, OptixCoopVecElemType matrixElementType>
+static __forceinline__ __device__ VecTOut optixCoopVecMatMul( const VecTIn& inputVector,
+                                                              CUdeviceptr matrix,  // 64 byte aligned, Array of KxN elements
+                                                              unsigned matrixOffsetInBytes,  // 64 byte aligned
+                                                              unsigned rowColumnStrideInBytes = 0 );
 
 /// Performs a component-wise atomic add reduction of the vector into global memory
 /// starting at \a offsetInBytes bytes after \a outputVector.

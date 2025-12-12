@@ -46,17 +46,36 @@ typedef enum OptixCoopVecOp
 #include <cuda_fp16.h>
 #endif
 
-#include <type_traits>
 
 namespace optix_internal {
 namespace coop_vec_type_traits {
 // clang-format off
+
+// We need to implement code that is available in <type_traits> since nvrtc does not support the <type_traits> header.
+// Custom is_float implementation - specialized only for half and float
+template <typename T> struct is_float { static const bool value = false; };
+template <> struct is_float<float> { static const bool value = true; };
+template <> struct is_float<half> { static const bool value = true; };
+
+template <typename T> struct is_integral { static const bool value = !is_float<T>::value; };
+
+template <typename T> struct is_signed_impl { static const bool value = static_cast<T>(-1) < static_cast<T>(0); };
+
+// If it's a float type, it's signed. Otherwise use the generic test.
+template <typename T>
+struct is_signed { static const bool value = is_float<T>::value ? true : is_signed_impl<T>::value; };
+// NVRTC is stricter about template instantiation requirements and requires both branches of a ternary operator
+// to be syntactically valid during compilation, so we need to explicitly specialize half to bypass the generic
+// is_signed_impl template that uses static_cast, avoiding the ambiguous conversion issue entirely.
+template <> struct is_signed<half> { static const bool value = true; };
+
 template <bool is_integral, bool is_signed, size_t byte_size> struct TT;
 template <> struct TT<true,  true,  1> { static const OptixCoopVecElemType value = OPTIX_COOP_VEC_ELEM_TYPE_INT8; };
 template <> struct TT<true,  false, 1> { static const OptixCoopVecElemType value = OPTIX_COOP_VEC_ELEM_TYPE_UINT8; };
 template <> struct TT<true,  true,  4> { static const OptixCoopVecElemType value = OPTIX_COOP_VEC_ELEM_TYPE_INT32; };
 template <> struct TT<true,  false, 4> { static const OptixCoopVecElemType value = OPTIX_COOP_VEC_ELEM_TYPE_UINT32; };
 template <> struct TT<false, true,  4> { static const OptixCoopVecElemType value = OPTIX_COOP_VEC_ELEM_TYPE_FLOAT32; };
+template <> struct TT<false, true,  2> { static const OptixCoopVecElemType value = OPTIX_COOP_VEC_ELEM_TYPE_FLOAT16; };
 
 template< size_t byte_size > struct TB;
 template<> struct TB<1> { using bitType = unsigned char; };
@@ -69,15 +88,9 @@ template<> struct TB<4> { using bitType = unsigned int; };
 template <typename T>
 struct OptixCoopVecElemTypeTrait
 {
-    static const OptixCoopVecElemType elementType = TT<std::is_integral<T>::value, std::is_signed<T>::value, sizeof( T )>::value;
-    using bitType                                 = typename TB<sizeof( T )>::bitType;
-};
-
-template <>
-struct OptixCoopVecElemTypeTrait<half>
-{
-    static const OptixCoopVecElemType elementType = OPTIX_COOP_VEC_ELEM_TYPE_FLOAT16;
-    using bitType                                 = typename TB<sizeof( half )>::bitType;
+    static const OptixCoopVecElemType elementType =
+        TT<coop_vec_type_traits::is_integral<T>::value, coop_vec_type_traits::is_signed<T>::value, sizeof( T )>::value;
+    using bitType = typename TB<sizeof( T )>::bitType;
 };
 }  // end namespace coop_vec_type_traits
 }  // end namespace optix_internal
@@ -882,6 +895,26 @@ static __forceinline__ __device__ VecTOut optixCoopVecMatMul( const VecTIn& inpu
 {
     return optix_internal::OptixCoopVecMatMulASMGenerator<VecTOut, VecTIn, inputInterpretation, matrixLayout, transpose, N, K, matrixElementType, biasElementType>::generateASM(
         inputVector, matrix, matrixOffsetInBytes, rowColumnStrideInBytes, bias, biasOffsetInBytes );
+}
+
+template <typename VecTOut,  //
+          typename VecTIn,
+          OptixCoopVecElemType     inputInterpretation,
+          OptixCoopVecMatrixLayout matrixLayout,
+          bool                     transpose,
+          unsigned int             N,
+          unsigned int             K,
+          OptixCoopVecElemType     matrixElementType>
+static __forceinline__ __device__ VecTOut optixCoopVecMatMul( const VecTIn& inputVector,
+                                                              CUdeviceptr matrix,  // 64 byte aligned, Array of KxN elements
+                                                              unsigned matrixOffsetInBytes,  // 64 byte aligned
+                                                              unsigned rowColumnStrideInBytes )
+{
+    return optix_internal::OptixCoopVecMatMulASMGenerator<VecTOut, VecTIn, inputInterpretation, matrixLayout, transpose, N, K, matrixElementType,
+                                                          OPTIX_COOP_VEC_ELEM_TYPE_UNKNOWN>::generateASM( inputVector, matrix,
+                                                                                                          matrixOffsetInBytes,
+                                                                                                          rowColumnStrideInBytes,
+                                                                                                          0, 0 );
 }
 
 template <typename VecTIn>

@@ -1174,6 +1174,18 @@ static __forceinline__ __device__ unsigned int optixUndefinedValue()
     return u0;
 }
 
+__device__ __forceinline__ unsigned int optixGetRemainingTraceDepth()
+{
+    unsigned int result;
+    asm (
+         "call (%0), _optix_get_remaining_trace_depth,"
+         "();"
+         : "=r"( result )
+         :
+         : );
+    return result;
+}
+
 static __forceinline__ __device__ float3 optixGetWorldRayOrigin()
 {
     float f0, f1, f2;
@@ -1302,21 +1314,6 @@ static __forceinline__ __device__ void optixHitObjectGetTriangleVertexData( floa
          : );
 }
 
-static __forceinline__ __device__ void optixGetMicroTriangleVertexData( float3 data[3] )
-{
-    asm( "call (%0, %1, %2, %3, %4, %5, %6, %7, %8), _optix_get_microtriangle_vertex_data, "
-         "();"
-         : "=f"( data[0].x ), "=f"( data[0].y ), "=f"( data[0].z ), "=f"( data[1].x ), "=f"( data[1].y ),
-           "=f"( data[1].z ), "=f"( data[2].x ), "=f"( data[2].y ), "=f"( data[2].z )
-         : );
-}
-static __forceinline__ __device__ void optixGetMicroTriangleBarycentricsData( float2 data[3] )
-{
-  asm( "call (%0, %1, %2, %3, %4, %5), _optix_get_microtriangle_barycentrics_data, "
-       "();"
-       : "=f"( data[0].x ), "=f"( data[0].y ), "=f"( data[1].x ), "=f"( data[1].y ), "=f"( data[2].x ), "=f"( data[2].y )
-       : );
-}
 
 static __forceinline__ __device__ void optixGetLinearCurveVertexData( OptixTraversableHandle gas,
                                                                       unsigned int           primIdx,
@@ -2494,20 +2491,6 @@ static __forceinline__ __device__ bool optixIsTriangleBackFaceHit()
     return optixGetHitKind() == OPTIX_HIT_KIND_TRIANGLE_BACK_FACE;
 }
 
-static __forceinline__ __device__ bool optixIsDisplacedMicromeshTriangleHit()
-{
-    return optixGetPrimitiveType( optixGetHitKind() ) == OPTIX_PRIMITIVE_TYPE_DISPLACED_MICROMESH_TRIANGLE;
-}
-
-static __forceinline__ __device__ bool optixIsDisplacedMicromeshTriangleFrontFaceHit()
-{
-    return optixIsDisplacedMicromeshTriangleHit() && optixIsFrontFaceHit();
-}
-
-static __forceinline__ __device__ bool optixIsDisplacedMicromeshTriangleBackFaceHit()
-{
-    return optixIsDisplacedMicromeshTriangleHit() && optixIsBackFaceHit();
-}
 
 static __forceinline__ __device__ float optixGetCurveParameter()
 {

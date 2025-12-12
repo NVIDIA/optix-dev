@@ -53,7 +53,7 @@ static __forceinline__ __device__ T optixLoadReadOnlyAlign16( const T* ptr )
     // Debug mode may keep this temporary variable
     // If T does not enforce 16B alignment, v may not be 16B aligned and storing the loaded data from ptr fails
     __align__(16) T v;
-    for( int ofs                     = 0; ofs < sizeof( T ); ofs += 16 )
+    for( unsigned int ofs            = 0; ofs < (unsigned int)sizeof( T ); ofs += 16 )
         *(uint4*)( (char*)&v + ofs ) = optixLdg( (unsigned long long)( (char*)ptr + ofs ) );
     return v;
 }
